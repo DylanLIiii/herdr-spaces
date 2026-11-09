@@ -1,0 +1,26 @@
+{
+  "passed": 18,
+  "checks": [
+    "Worker submitted a real report through its assigned run",
+    "Idle Worker leaves the task awaiting review",
+    "Native program reports its own runtime state",
+    "Second start reuses the registered Main",
+    "Main/Worker terminal bindings route to one project",
+    "A live Main cannot be recovered into a second owner",
+    "Native Project layout renders without host errors or overlays",
+    "Native tasks view has no host errors",
+    "Native sessions view has no host errors",
+    "Native files view has no host errors",
+    "Keyboard session navigation focuses the existing Worker",
+    "Worker navigation returns to its own Main",
+    "Native keyboard/detail/narrow states have no host errors",
+    "Closing the panel preserves the live Main",
+    "Worker exit still does not accept the task",
+    "Only Main acceptance completes the task",
+    "Restart keeps Main identity and advances generation",
+    "All source and installed mods pass native check"
+  ],
+  "app": "herdr-app 0.1.14",
+  "core": "hc 0.1.19",
+  "synthetic": true
+}
