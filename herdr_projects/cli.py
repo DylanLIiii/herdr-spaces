@@ -6,7 +6,7 @@ import sqlite3
 import sys
 
 from .store import ProjectError, Store, default_home, identity_from_env
-from . import __version__, runtime, onboarding
+from . import __version__, runtime, onboarding, manager
 
 PROTOCOL_VERSION = 1
 
@@ -54,19 +54,28 @@ def parser():
         bind.add_argument('--' + field, required=True)
     for field in ('name', 'goal', 'cwd'):
         bind.add_argument('--' + field)
+    bind.add_argument('--replace-generation', type=int, help='Explicitly replace the PM only if this generation still owns the project')
+    bind.add_argument('--pm-skill', help='Project machine Skill file/directory; empty selects the bundled Skill')
+    bind.add_argument('--worker-backend', choices=manager.BACKENDS, help='Default SubAgent Coding tool')
+    bind.add_argument('--worker-model', help='Default SubAgent model; empty uses the Coding tool default')
     notify = commands.add_parser('introduce', help='Send one project introduction to an idle Agent, never force input')
     for field in ('project', 'core-scope'):
         notify.add_argument('--' + field, required=True)
     notify.add_argument('--generation', required=True, type=int)
-    for name in ('show', 'context', 'history', 'apply', 'report', 'start', 'worker', 'reconcile', '_run', 'read'):
+    for name in ('show', 'context', 'skill', 'history', 'apply', 'report', 'start', 'worker', 'reconcile', '_run', 'read'):
         sub = commands.add_parser(name)
         sub.add_argument('--project', default=os.environ.get('HERDR_PROJECT_ID'), required=not bool(os.environ.get('HERDR_PROJECT_ID')))
+        if name == 'skill':
+            source = sub.add_mutually_exclusive_group()
+            source.add_argument('--resource', help='Read a complete text resource relative to the configured Skill directory')
+            source.add_argument('--list', action='store_true', help='List all files in the configured Skill directory')
         if name in ('apply', 'report'):
             sub.add_argument('--file', required=True, help='JSON request file, or - for stdin')
         if name in ('apply', 'worker'):
             sub.add_argument('--revision', type=int, required=True)
         if name in ('start', 'worker'):
-            sub.add_argument('--backend', choices=('pi', 'claude', 'codex'), default='pi')
+            sub.add_argument('--backend', choices=manager.BACKENDS, default='pi' if name == 'start' else None)
+            sub.add_argument('--model', help='Model for this launch (Worker defaults to project settings)')
             sub.add_argument('--command-json', help='Custom/resume argv array, containing one separate {context} argument')
             sub.add_argument('--space', help='Existing local Herdr Space id; otherwise a project Space is used')
             sub.add_argument('--tab', help='Existing local tab id; otherwise an execution tab is used')
@@ -89,7 +98,7 @@ def main(argv=None):
     try:
         if args.action == 'probe':
             result = dict(protocolVersion=PROTOCOL_VERSION, schemaVersion=1, version=__version__,
-                          ledgerHome=str(Path(args.home or default_home()).expanduser().resolve()), capabilities=['leader-bind', 'guarded-introduction', 'core-command-discovery'])
+                          ledgerHome=str(Path(args.home or default_home()).expanduser().resolve()), capabilities=['leader-bind', 'guarded-introduction', 'core-command-discovery', 'pm-configuration'])
         elif args.action == 'operations':
             result = dict(operations=OPERATIONS, note='All apply requests require op, requestId and the current project revision. Call from the managed Main terminal. Replaying the same requestId/content is idempotent.')
         else:
@@ -111,11 +120,20 @@ def main(argv=None):
             elif action == 'setup':
                 result = onboarding.setup(store, args.terminal)
             elif action == 'bind':
-                result = onboarding.bind(store, args.terminal, args.core_scope, args.project, args.name, args.goal, args.cwd)
+                result = onboarding.bind(store, args.terminal, args.core_scope, args.project, args.name, args.goal, args.cwd,
+                                         args.replace_generation, args.pm_skill, args.worker_backend, args.worker_model)
             elif action == 'introduce':
                 result = onboarding.notify(store, args.project, args.core_scope, args.generation)
             elif action == 'show':
                 result = store.public(store.get(args.project))
+                result.update(manager.settings(result))
+            elif action == 'skill':
+                project = store.get(args.project)
+                if args.list:
+                    result = dict(path=manager.settings(project)['pmSkill'], resources=manager.list_resources(project))
+                else:
+                    print(manager.read_skill(project, args.resource), end='')
+                    return 0
             elif action == 'context':
                 print(runtime.context(store, args.project, args.run))
                 return 0
@@ -129,7 +147,8 @@ def main(argv=None):
                     raise ProjectError('Report must be an object')
                 result = store.report(args.project, request, identity_from_env(store))
             elif action in ('start', 'worker'):
-                argv = runtime.command(json.loads(args.command_json) if args.command_json else None, args.backend)
+                argv = manager.worker_command(store.get(args.project) if action == 'worker' else {}, args.backend,
+                                              args.model, json.loads(args.command_json) if args.command_json else None)
                 result = runtime.start(store, args.project, argv, args.space, args.tab,
                                        getattr(args, 'item', None), getattr(args, 'revision', None), identity_from_env(store))
             elif action == 'reconcile':

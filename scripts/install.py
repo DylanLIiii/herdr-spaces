@@ -15,7 +15,8 @@ ROOT = Path(__file__).resolve().parent.parent
 
 def runtime_bundle():
     names = ['project.py', 'LICENSE'] + ['herdr_projects/' + name for name in
-        ('__init__.py', 'store.py', 'runtime.py', 'cli.py', 'onboarding.py')]
+        ('__init__.py', 'store.py', 'runtime.py', 'cli.py', 'onboarding.py', 'manager.py',
+         'skills/project-manager/SKILL.md', 'skills/project-manager/references/subagents.md')]
     files = {name: (ROOT / name).read_text() for name in names}
     digest = hashlib.sha256(json.dumps(files, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
     return dict(files=files, sha256=digest)

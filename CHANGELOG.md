@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Support explicit PM rebinding with generation checks. Preserve the stable Main identity, project records and active Workers while revoking the previous PM credentials and terminal binding.
+- Bundle a complete Project Manager Skill and SubAgent guide, allow a project-specific Skill path, and expose full entry/resource reads through the project CLI.
+- Guide SubAgent Coding tool and model selection in the native setup form; apply saved preferences to Worker launches with optional per-launch overrides.
+- Upgrade remote runtimes lacking PM configuration support while preserving their registered ledger paths.
+- Group native PM setup into project, Skill and SubAgent sections, show tool availability, add a sidebar configuration entry, and use a dedicated handoff confirmation with cancellation. Show saved settings and next steps after success; retry introduction failures without rebinding.
+- Launch Codex Workers with `--no-daemon` so each process retains its own Herdr terminal identity.
+- Adapt BoardUI-inspired information hierarchy to native GPUI: project summary counts, attention filtering, priority task groups, compact detail views, PM/Worker role badges, and settings summaries with on-demand editing. Preserve the existing personal layout and real ledger/execution state distinctions.
+
 ## 0.3.1
 
 - Fix Leader setup failing with `No such file or directory: 'hc'` when the project's background environment omits the user install directory from PATH. Discover Herdr Core from PATH, `HC_INSTALL_DIR`, or `~/.local/bin`, including installations without the optional `hc` alias; validate its version before use.

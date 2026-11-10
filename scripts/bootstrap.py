@@ -21,7 +21,9 @@ def prepare(name, bundle):
         raise ValueError('Invalid installation name')
     files = bundle['files']
     allowed = {'project.py', 'LICENSE', 'herdr_projects/__init__.py', 'herdr_projects/store.py',
-               'herdr_projects/runtime.py', 'herdr_projects/cli.py', 'herdr_projects/onboarding.py'}
+               'herdr_projects/runtime.py', 'herdr_projects/cli.py', 'herdr_projects/onboarding.py',
+               'herdr_projects/manager.py', 'herdr_projects/skills/project-manager/SKILL.md',
+               'herdr_projects/skills/project-manager/references/subagents.md'}
     if set(files) != allowed or any(not isinstance(v, str) for v in files.values()):
         raise ValueError('Invalid runtime bundle')
     digest = hashlib.sha256(json.dumps(files, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
@@ -46,7 +48,7 @@ def prepare(name, bundle):
             ledger = probe['ledgerHome']
             if not Path(ledger).is_absolute():
                 raise ValueError('Existing ledger path is invalid')
-            if {'leader-bind', 'core-command-discovery'}.issubset(probe.get('capabilities', [])):
+            if {'leader-bind', 'core-command-discovery', 'pm-configuration'}.issubset(probe.get('capabilities', [])):
                 return dict(prepared=False, command=command, ledgerHome=ledger)
         target = data / 'herdr-spaces/runtime' / name / digest[:20]
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -66,7 +68,7 @@ def prepare(name, bundle):
                 raise ValueError('Existing runtime files changed; no files were overwritten')
         command = [sys.executable, str(target / 'project.py'), '--home', ledger]
         check = subprocess.run(command + ['probe'], capture_output=True, text=True, timeout=10, check=True)
-        if not {'leader-bind', 'core-command-discovery'}.issubset(json.loads(check.stdout).get('capabilities', [])):
+        if not {'leader-bind', 'core-command-discovery', 'pm-configuration'}.issubset(json.loads(check.stdout).get('capabilities', [])):
             raise ValueError('Bundled runtime does not support Leader setup')
         descriptor, temporary = tempfile.mkstemp(prefix='.' + name, dir=config)
         try:

@@ -1,0 +1,29 @@
+{
+  "synthetic": true,
+  "modelInvoked": false,
+  "appVersion": "0.1.14",
+  "coreVersion": "0.1.19",
+  "layout": "projects-pm",
+  "fixturesCleanedUp": true,
+  "method": "Real macOS Herdr native dialog; temporary command-driven View subclass invoking production methods; real Core terminals and isolated ledger. No pointer/key automation.",
+  "handoffGenerations": [
+    1,
+    2,
+    3
+  ],
+  "skillCharacters": 1743,
+  "guideCharacters": 1564,
+  "subAgent": {
+    "backend": "codex",
+    "model": "ux-fixture-model"
+  },
+  "checks": [
+    "Native bind delivered guarded introduction",
+    "Fixture read complete Skill and SubAgent resource",
+    "Rebind retained project and incremented generation",
+    "Saved Coding tool/model reached receiving PM",
+    "Cancel and confirm views rendered without host errors",
+    "Compact 480x560 native dialog retained fixed footer and scrollable body",
+    "Installed project sidebar opened real PM settings with no host errors"
+  ]
+}

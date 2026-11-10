@@ -10,7 +10,7 @@ from scripts.install import install
 class InstallTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(prefix='projects install ')
-        self.root = Path(self.tmp.name)
+        self.root = Path(self.tmp.name).resolve()
         self.home, self.bin, self.data = [self.root / s for s in ('app', 'bin', 'data')]
         self.registry = self.root / 'config/herdr-spaces/runtimes'
         self.home.mkdir()

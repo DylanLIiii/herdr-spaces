@@ -12,7 +12,8 @@ Herdr 的原生项目侧栏，以及由本项目 Main 维护的持久账本。�
 - 面板获得键盘焦点后，`1 / 2 / 3` 切换标签，方向键选择记录，Enter 打开，Esc 返回，`r` 刷新。
 - SQLite 保存项目、执行、账本版本、回报去重和修改记录。关闭窗口、结束 Worker 或重启 Main 不会清空项目。
 - **项目归属机器**：账本、pm.md、产物、Main 和 Workers 都留在项目所在机器。桌面侧栏通过 Herdr 已有机器连接读取，不复制或同步另一份账本。
-- **现有终端可成为 Leader**：右键左侧 Agent → 设为 Project Leader，选择或创建项目。目标机器缺少项目运行程序时，设置流程自动准备。
+- **PM 绑定与交接**：右键左侧 Agent → 设置 / 重新绑定 PM，选择或创建项目，也可确认重新绑定现有 PM。保留 Main 身份与项目记录，旧 PM 凭据失效。目标机器缺少对应项目运行程序时，设置流程自动准备或升级。
+- **PM Skill 与 SubAgent 配置**：完整读取内置或自定义 Project Manager Skill 及引用文件；在设置中选择 SubAgent 的 Coding 工具和模型，后续派发自动使用。
 - 基础功能无需后端 Hooks。启动指令交代维护协议，Main 显式调用项目 CLI；自动压缩/恢复注入可另行适配。
 
 ## 安装
@@ -39,13 +40,13 @@ herdr-app do layout.switch '{"name":"projects"}'
 ## 在界面中开始使用
 
 1. 在 Herdr 中打开项目机器上的 Agent，继续使用它的原生终端。
-2. 右键左侧 Agent，选择 **设为 Project Leader…**；也可以点击 Project 空状态中的同名按钮。
-3. 选择已有项目，或填写项目名称、目标和目录。目录默认取当前终端的位置。
-4. 点击 **绑定并交代项目**。绑定沿用当前终端，不创建第二个 Agent。空闲 Agent 会收到一条项目说明；正在工作或等待确认时，先保存绑定，之后再点击“交代项目”。
+2. 右键左侧 Agent，选择 **设置 / 重新绑定 PM…**；也可以点击 Project 空状态中的 **设置项目 PM…**。已有项目可从侧栏标题旁的 **PM 配置** 进入。
+3. 按窗口中的三个分组选择项目、PM 工作指南和 SubAgent 默认配置。目录默认取当前终端的位置，Skill 默认使用内置指南；选“自定义 Skill”后填写绝对路径。
+4. 点击 **绑定 PM 并发送说明**。绑定沿用当前终端，不创建第二个 Agent。空闲 Agent 会收到一条项目说明；正在工作或等待确认时，先保存绑定，之后再点击“交代项目”。
 
 目标机器尚未安装项目运行程序时，这个设置动作会从本机安装包自动准备它；无需在服务器手动克隆仓库或输入安装命令。它使用现有 Herdr 连接，不联网下载代码、不复制账本、不修改 Agent 配置。左侧会显示 Leader 标记。
 
-一个项目已有活跃 Leader 时，界面提供进入原终端，不会静默替换。详细行为和旧版升级见 [Leader 设置说明](docs/onboarding.md)。
+一个项目已有活跃 PM 时，界面提供进入原终端或“重新绑定到此终端…”。明确确认后切换 PM，旧终端与已有 Workers 继续运行；接任 PM 会收到完整 Skill 的读取指引。详细行为、权限边界和旧版升级见 [PM 设置说明](docs/onboarding.md)。
 
 ## 项目在远端服务器
 
@@ -95,7 +96,9 @@ herdr-project start --project my-project \
 
 ## Main 如何维护
 
-Main 启动时获得当前项目、Main 身份、会话代次及 CLI 协议。每次业务变化：读取记录，写入一个 JSON 请求，然后使用已读版本提交。
+Main 启动时获得当前项目、Main 身份、会话代次、完整 PM Skill 的读取入口及 CLI 协议。通过 `skill --project PROJECT` 读取 Skill 原文，`skill --list` 列出资源，`skill --resource RELATIVE_PATH` 完整读取引用文件（这些命令都需要 `--project PROJECT`）。每次业务变化：读取记录，写入一个 JSON 请求，然后使用已读版本提交。
+
+`worker` 未显式指定工具和模型时，使用项目保存的 SubAgent 配置；`--backend pi|claude|codex` 和 `--model MODEL` 可单次覆盖。模型留空使用 Coding 工具默认值，工具安装、登录及权限仍由其自身配置管理。
 
 ```sh
 herdr-project show --project my-project

@@ -1,0 +1,35 @@
+{
+  "syntheticFixture": true,
+  "recoveryEvidence": "recovery-result.json",
+  "smallSettingsScreenshots": ["settings-small.png", "handoff-small.png", "recovery-error-small.png"],
+  "modelInvoked": false,
+  "method": "macOS native production views with temporary command drivers and isolated ledger; no pointer or key automation",
+  "handoffGenerations": [
+    1,
+    2
+  ],
+  "updatedSettings": {
+    "backend": "codex",
+    "model": "fixture-model"
+  },
+  "skillCharacters": 1743,
+  "referenceCharacters": 1564,
+  "layout": "sulan-tools",
+  "layoutFileUnchangedDuringUpdate": true,
+  "userFocusUnchanged": true,
+  "fixturesCleanedUp": true,
+  "backup": "/Users/dylan/.config/herdr-app/backups/project-ui-20261111-002856",
+  "screenshots": [
+    "project.png",
+    "sessions.png",
+    "detail.png",
+    "settings.png",
+    "handoff.png",
+    "narrow.png",
+    "installed.png"
+  ],
+  "narrowSize": [
+    300,
+    640
+  ]
+}

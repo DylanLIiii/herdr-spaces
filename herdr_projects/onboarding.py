@@ -2,8 +2,9 @@
 import os
 from pathlib import Path
 import shlex
+import shutil
 
-from . import runtime
+from . import runtime, manager
 from .store import ProjectError, identifier, now, text, uid
 
 
@@ -23,49 +24,77 @@ def setup(store, address):
     return dict(protocolVersion=1, coreScope=scopes[0], terminal=address,
                 cwd=cwd, suggestedName=Path(cwd).name if cwd else '', newProjectId=uid('project'),
                 binding=store.snapshot(address, scopes=scopes)['binding'],
-                projects=[{k: p[k] for k in ('id', 'name', 'goal', 'cwd', 'main')} for p in projects])
+                defaults=manager.settings({}),
+                tools=[dict(id=backend, available=bool(shutil.which(backend))) for backend in manager.BACKENDS],
+                projects=[{k: p[k] for k in ('id', 'name', 'goal', 'cwd', 'main')} | manager.settings(p) for p in projects])
 
 
-def bind(store, address, core_scope, project_id, name=None, goal=None, cwd=None):
+def bind(store, address, core_scope, project_id, name=None, goal=None, cwd=None,
+         replace_generation=None, pm_skill=None, worker_backend=None, worker_model=None):
     identifier(project_id)
     scopes = runtime.connected_scopes()
     if core_scope != scopes[0]:
         raise ProjectError('机器连接已改变，请重新打开项目设置。')
     terminal = terminal_info(address)
     # Two clients selecting the same terminal/project cannot create two owners.
-    with runtime.lock(store, 'bind-' + address), runtime.lock(store, project_id + '-main-launch'):
+    with runtime.lock(store, 'bind-' + address), runtime.lock(store, project_id + '-main-launch'), runtime.lock(store, project_id + '-intro'):
         previous = store.snapshot(address, scopes=scopes)
         if previous['binding'] and (previous['binding']['project_id'] != project_id or previous['binding']['role'] != 'main'):
             raise ProjectError('此终端已属于另一个项目或执行任务，不能再指定为 Leader。')
         exists = any(p['id'] == project_id for p in store.snapshot()['projects'])
+        preferences = manager.configure(store.get(project_id) if exists else {}, pm_skill, worker_backend, worker_model)
         if not exists:
+            if replace_generation is not None:
+                raise ProjectError('项目已改变，请重新打开项目设置。')
             if not name or not goal or not cwd:
                 raise ProjectError('请填写项目名称、目标和目录。')
             store.create(project_id, name, goal, cwd)
         with store.transaction():
             p = store.get(project_id)
             main = p['main']
+            if replace_generation is not None and main['generation'] != replace_generation:
+                raise ProjectError('PM 已改变，请重新打开项目设置后再绑定。')
+            if main.get('scope') and main['scope'] not in scopes:
+                raise ProjectError('请在项目原来的 Core 上重新绑定 PM。')
             same = main.get('terminal') == address and main.get('scope') in scopes and main['state'] == 'running'
+            old_terminal = None
+            changed = any(p.get(k) != v for k, v in preferences.items())
             if not same:
-                if main['state'] not in ('inactive', 'exited'):
-                    raise ProjectError('此项目已有 Leader。请先进入原终端；不会替换正在运行的 Leader。')
-                if previous['binding']:
-                    raise ProjectError('旧终端不能恢复为新一代 Leader。请新建终端，再绑定项目。')
-                terminal_info(address)
+                if main['state'] not in ('inactive', 'exited') and replace_generation is None:
+                    raise ProjectError('此项目已有 PM。重新绑定需要明确指定当前 generation。')
+                if previous['binding'] and replace_generation is None:
+                    raise ProjectError('恢复旧终端需要明确指定当前 generation。')
+                terminal = terminal_info(address)
+                old_terminal = main.get('terminal')
+                old_scope = main.get('scope')
+                # Revoke the previous routing and credentials in the same commit.
+                if old_terminal:
+                    store.db.execute('DELETE FROM bindings WHERE scope=? AND terminal=? AND project_id=? AND role=?',
+                                     (old_scope, old_terminal, project_id, 'main'))
                 labels = terminal.get('labels') or {}
                 main.update(generation=main['generation'] + 1, token=uid('token'), state='running', mode='attached',
                             terminal=address, scope=scopes[0], startedAt=now(),
                             space=labels.get('herdr.space'), tab=labels.get('herdr.tab'), notice=None)
-                main.pop('command', None)
+                for key in ('command', 'exitCode', 'endedAt', 'reconciled'):
+                    main.pop(key, None)
                 store.bind(project_id, address, scopes[0], 'main')
+            if not same or changed:
+                p.update(preferences)
+                main['notice'] = None
                 p['revision'] += 1
                 store.save(p)
-                store.event(p, uid('bind'), '', main['id'], dict(op='main.bind', terminal=address))
+                store.event(p, uid('bind'), '', main['id'], dict(op='main.rebind' if old_terminal else 'main.configure' if same else 'main.bind',
+                            terminal=address, previousTerminal=old_terminal, generation=main['generation'], **preferences))
         warning = None
         try:
             runtime.hc(['label', address, 'projects.project=' + project_id, 'projects.role=main', 'projects.name=' + p['name']])
         except ProjectError:
             warning = '项目已绑定，左侧标记暂未更新。刷新后可重试，不会重复创建 Leader。'
+        if old_terminal and old_terminal != address:
+            try:
+                runtime.hc(['label', old_terminal, 'projects.role=former-main'])
+            except ProjectError:
+                warning = 'PM 已重新绑定且旧凭据已失效，旧终端的 Leader 标记暂未清除。'
         return dict(project=store.public(p), warning=warning)
 
 
@@ -91,8 +120,12 @@ def introduction(store, project_id):
     p = store.get(project_id)
     return f'''你已被用户指定为项目 {p['name']} 的 Project Leader（Main）。保持当前原生会话。
 项目目标：{p['goal'][:1500]}
-请先执行以下命令，读取完整规则、项目记录与维护接口，再继续工作：
+用户已授权你完整读取本项目配置的 Project Manager Skill 及其目录内的引用文件。
+请先执行以下命令，读取完整 Skill、引用资源、项目记录与维护接口，再继续工作：
+{runtime.cli_prefix(store)} skill --project {shlex.quote(project_id)}
+{runtime.cli_prefix(store)} skill --project {shlex.quote(project_id)} --list
 {runtime.cli_prefix(store)} context --project {shlex.quote(project_id)}
+按 Skill 引用使用 skill --resource 相对路径读取全文。先核对项目的 SubAgent Coding 工具和模型设置，缺失时引导用户配置。
 任务变化通过此项目 CLI 维护；不要重复创建 Leader。此消息只建立项目职责，不新增合并、部署或派发授权。'''
 
 

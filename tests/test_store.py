@@ -52,6 +52,17 @@ class LedgerTests(unittest.TestCase):
             self.store.save(p)
         return dict(role='worker', project='one', run='run-1', token=self.worker_token)
 
+    def test_existing_worker_can_report_after_pm_rebinding(self):
+        from herdr_projects import onboarding, runtime
+        worker = self.run_fixture()
+        before = self.store.get('one')['runs']
+        with patch.object(runtime, 'hc', side_effect=lambda args: {'address':args[1], 'state':'live'}):
+            onboarding.bind(self.store, 't3', 'core:test', 'one', replace_generation=1)
+        self.assertEqual(before, self.store.get('one')['runs'])
+        result = self.store.report('one', dict(requestId='after-handoff', text='Still working', submitted=True), worker)
+        self.assertEqual('review', result['project']['items'][0]['status'])
+        with self.assertRaises(ProjectError): self.store.check_main(self.store.get('one'), self.identity)
+
     def test_durable_identity_and_todo_promotion(self):
         main = self.store.get('one')['main']['id']
         self.task()

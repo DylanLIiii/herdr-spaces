@@ -121,7 +121,8 @@ def main():
         time.sleep(1)
         check('Setup automatically installs only on the selected machine',registry.exists() and not Path(client['XDG_DATA_HOME'],'herdr-projects').exists())
         call([app,'shot',str(output/'form.png')])
-        pointer.type_ascii('deliver fixture');pointer.key('Return');pointer.key('Return')
+        pointer.type_ascii('deliver fixture')
+        for _ in range(3):pointer.key('Return')  # goal -> cwd -> model -> bind (built-in Skill)
         wait_for(lambda:(scratch/'server/attached-ready').exists(),'existing Agent receives introduction and writes a task')
         registered=json.loads(registry.read_text());cli=registered['command']
         if args.legacy_source:

@@ -10,7 +10,9 @@ Projects 是一个独立插件工程：Python CLI 保存 SQLite 账本并通过�
 
 一个 Project 的 Main id 在创建时确定，终身归属于该项目。当前 terminal、core scope、generation、launch token 和 process state 独立于这个 id。Main 重启提升 generation；界面始终跟随显式 terminal binding，不根据仓库目录猜项目。0.2 的新执行使用 `hc server status` 返回的持久 Core id 作为 scope；0.1 的环境 scope 保留兼容读取，多个匹配则拒绝猜测。
 
-0.3 还支持 `bind` 将已有原生终端指定为 Leader，保持该终端和会话。Attached 模式通过 Core id / terminal 绑定解析 CLI 身份；Managed 模式继续使用代次 token。绑定和介绍状态分别记录，不能把绑定视为 Agent 已收到规则。详见 [Leader 设置](onboarding.md)。
+0.3 还支持 `bind` 将已有原生终端指定为 Leader，保持该终端和会话。Attached 模式通过 Core id / terminal 绑定解析 CLI 身份；Managed 模式继续使用代次 token。绑定和介绍状态分别记录，不能把绑定视为 Agent 已收到规则。显式重新绑定校验 generation，并在同一事务中删除旧 binding、提升 generation、轮换 token、更新终端和保存配置。Main id、项目历史与 Worker 身份保持；旧进程退出使用 token 比较，不会覆盖接任 PM。绑定与介绍共用项目介绍锁，避免向已交接的终端发送新规则。
+
+项目可保存 `pmSkill` 和 `subAgent {backend, model}`。旧项目读取时回退到内置 Skill 与 Pi 默认模型。`skill` 全文读取入口及其目录内资源，不沿用产物预览截断；引用路径不能逃逸 Skill 目录。Worker 在生成 argv 时使用保存的工具和模型，显式 backend 切换不携带其他工具的模型。安装包与能力探测包含这些功能，旧远端运行程序在设置时升级。详见 [PM 设置](onboarding.md)。
 
 `start` 在事务内预留 owner，再调用 `hc run --bg --keep --no-parent --no-notify`。独立 Python wrapper 将项目环境和启动上下文传给现有 Agent 程序，继承原生 PTY，不代理其输入输出。运行没有后台协调 daemon；窗口关闭后 core 继续承载程序，SQLite 保留记录。包装程序保留原生进程的 Ctrl+C 处理，避免 Python 的 KeyboardInterrupt 意外终止 Agent。
 

@@ -12,6 +12,7 @@ import subprocess
 import sys
 
 from .store import ProjectError, core_scope, identifier, now, text, uid
+from . import manager
 
 ROOT = Path(__file__).resolve().parent.parent
 ENTRY = ROOT / 'project.py'
@@ -142,14 +143,25 @@ def context(store, project_id, run_id=None):
 不要额外派发 Worker，除非用户明确授权。不要将进程结束等同于交付验收。
 '''
     else:
-        rules += f'''在目标、任务、阻塞、证据、决策有实质变化时维护账本；无需每轮刷记录。
+        preferences = manager.settings(p)
+        rules += f'''用户授权完整读取本项目对应的 Project Manager Skill 及其目录内的引用文件。
+Skill 入口：{preferences['pmSkill']}
+先读取 Skill 全文，列出资源，并按引用读取完整文件（这些命令不截断内容）：
+  {cmd} skill --project {shlex.quote(p['id'])}
+  {cmd} skill --project {shlex.quote(p['id'])} --list
+  {cmd} skill --project {shlex.quote(p['id'])} --resource RELATIVE_PATH
+若宿主 Agent 限制文件或 CLI 访问，请按其正常权限流程处理；绑定不修改宿主的沙箱配置。
+SubAgent 配置：{json.dumps(preferences['subAgent'], ensure_ascii=False)}
+核对 Coding 工具和模型；模型为空时使用工具默认模型。引导用户补全配置、工具安装和登录。
+在目标、任务、阻塞、证据、决策有实质变化时维护账本；无需每轮刷记录。
 维护步骤：show 读取 revision → 写 JSON 请求文件 → apply。冲突后重读，不盲目覆盖。
   {cmd} apply --project {shlex.quote(p['id'])} --revision REVISION --file /absolute/request.json
 登记示例：{{"requestId":"request-unique-id","op":"todo.add","id":"work-unique-id","title":"工作标题","sourceRef":"用户本轮要求","brief":"背景","nextAction":"下一步"}}
 细化示例：{{"requestId":"promote-unique-id","op":"todo.promote","id":"work-unique-id","brief":"执行范围","acceptanceCriteria":["可验证标准"]}}
 运行 {cmd} operations 查看全部写入协议。待办提升保留 id；checklist 是任务下的步骤。
 派发 Worker 前确认授权、范围、依赖和验收标准，使用：
-  {cmd} worker --project {shlex.quote(p['id'])} --item WORK_ID --revision REVISION --backend pi
+  {cmd} worker --project {shlex.quote(p['id'])} --item WORK_ID --revision REVISION
+此命令使用项目保存的 Coding 工具和模型；可用 --backend / --model 单次覆盖，或 --command-json 自定义完整 argv。
 Worker 报告只能进入待核验。先核验证据，再 artifact.review，最后 item.status accepted 并给 evidenceRefs。
 空闲、done、进程退出、步骤勾选均不代表验收。验收不代表合并或部署授权。
 Main 进程重新启动仍是同一个 Main；不要创建另一个项目 owner。

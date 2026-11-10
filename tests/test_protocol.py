@@ -31,7 +31,7 @@ class ProtocolTests(unittest.TestCase):
 
     def test_guarded_artifact_read_refuses_changed_core_or_ledger(self):
         with tempfile.TemporaryDirectory() as temp:
-            home = Path(temp) / 'ledger'
+            home = Path(temp).resolve() / 'ledger'
             store = Store(home)
             store.create('one', 'One', 'Goal', temp)
             store.close()

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
-import { groups, sessionStatus, location } from '../mods/project/model.js';
+import { groups, summary, sessionStatus, location } from '../mods/project/model.js';
 
 const fixture = id => ({id,name:id,goal:'A goal',cwd:'/repo',revision:3,
   main:{id:'main-'+id,state:'running',terminal:id+'-main'},
@@ -54,7 +54,7 @@ async function host(options={}){
 
 test('ledger groups preserve ready/review/cancelled distinctions and exact counts',()=>{
   const p=fixture('a');p.items.push({id:'ready',kind:'task',status:'ready'},{id:'cancel',kind:'todo',status:'cancelled'});
-  assert.deepEqual(groups(p.items).map(g=>[g.id,g.items.length]),[['todo',1],['ready',1],['review',1],['cancelled',1]]);
+  assert.deepEqual(groups(p.items).map(g=>[g.id,g.items.length]),[['review',1],['ready',1],['todo',1],['cancelled',1]]);
   assert.equal(sessionStatus(p.runs[0],{status:'idle'}),'空闲');assert.equal(p.items[1].status,'review');
 });
 
@@ -73,7 +73,7 @@ test('actual View renders ledger, detail, scoped sessions and native navigation'
 
 test('keyboard navigation opens work records and returns through native sessions',async()=>{
   const h=await host();await h.respond(fixture('a'));
-  h.view.handleKey({key:'1'},h.cx);h.view.handleKey({key:'down'},h.cx);h.view.handleKey({key:'down'},h.cx);h.view.handleKey({key:'enter'},h.cx);
+  h.view.handleKey({key:'1'},h.cx);h.view.handleKey({key:'down'},h.cx);h.view.handleKey({key:'enter'},h.cx);
   assert.equal(h.view.detail,'task');h.view.handleKey({key:'escape'},h.cx);assert.equal(h.view.detail,null);
   h.state.live=[{address:'a-main',status:'idle'}];h.view.handleKey({key:'2'},h.cx);h.view.handleKey({key:'down'},h.cx);h.view.handleKey({key:'enter'},h.cx);
   assert.equal(h.state.calls.at(-1).args.terminal,'a-main');h.view.close();
@@ -151,6 +151,22 @@ test('missing runtime offers Leader setup instead of raw installation commands',
   h.state.pending.shift().resolve({code:2,stderr:JSON.stringify({code:'runtime_missing',message:'runtime absent'})});await turn();
   const root=h.view.render(h.cx);assert.ok(find(root,'project-setup'));
   assert.doesNotMatch(allText(root),/scripts\/install.py|herdr-project create|Error:/);h.view.close();
+});
+
+test('attention filter and keyboard share the same ledger rows without counting cancelled work as done',async()=>{
+ const h=await host();const p=fixture('a');p.items.push({...p.items[1],id:'blocked',status:'blocked',resolution:'Needs credentials'}, {...p.items[1],id:'cancelled',status:'cancelled'}, {...p.items[1],id:'accepted',status:'accepted'});
+ await h.respond(p);assert.deepEqual(summary(p.items),{pending:1,running:0,done:1,blocked:1,review:1});
+ let root=h.view.render(h.cx);find(root,'project-attention').events.click({},h.cx);root=h.view.render(h.cx);
+ assert.ok(find(root,'work-blocked'));assert.ok(find(root,'work-task'));assert.equal(find(root,'work-todo'),null);
+ h.view.handleKey({key:'down'},h.cx);h.view.handleKey({key:'enter'},h.cx);assert.equal(h.view.detail,'blocked');
+ h.view.handleKey({key:'escape'},h.cx);find(h.view.render(h.cx),'project-attention').events.click({},h.cx);assert.ok(find(h.view.render(h.cx),'work-todo'));
+ h.state.focus={terminal:'b-main'};h.view.render(h.cx);assert.equal(h.view.attentionOnly,false);h.view.close();
+});
+
+test('scoped PM state stays separate from accepted task counts and details retain full titles',async()=>{
+ const h=await host();const p=fixture('a');p.items[1].title='很长的任务标题'.repeat(30);p.main.state='exited';h.state.live=[{address:'a-main',status:'working'}];await h.respond(p);
+ let root=h.view.render(h.cx);assert.match(allText(root),/PM · 执行已退出/);assert.equal(summary(p.items).done,0);
+ find(root,'work-task').events.click({},h.cx);root=h.view.render(h.cx);assert.ok(allText(root).includes(p.items[1].title));assert.equal(find(root,'project-attention'),null);h.view.close();
 });
 
 test('closing during a read prevents updates and renders no new composer',async()=>{

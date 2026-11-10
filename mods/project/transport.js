@@ -45,7 +45,7 @@ export async function callRuntime(config,args,loc,exec) {
 }
 
 export function supportsLeaderSetup(probe) {
-  return ['leader-bind','core-command-discovery'].every(feature=>probe?.capabilities?.includes(feature));
+  return ['leader-bind','core-command-discovery','pm-configuration'].every(feature=>probe?.capabilities?.includes(feature));
 }
 
 export async function prepareRuntime(config,loc,exec,readTextFile) {

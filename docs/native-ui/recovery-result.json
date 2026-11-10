@@ -1,0 +1,171 @@
+{
+  "method": "Native production Setup View; actual isolated SQLite ledger and Core terminals. Executable wrapper exits 73 before introduce delivery once; retry delegates to the real runtime. No mocked View response, pointer automation or model invocation.",
+  "window": {
+    "width": 480,
+    "height": 560
+  },
+  "project": "project-67dae74d410b461a",
+  "mainIdBefore": "main-098cd64f55724b6a",
+  "mainIdAfter": "main-098cd64f55724b6a",
+  "failedView": {
+    "busy": false,
+    "error": "隔离验证：介绍发送前的传输故障，请重试",
+    "bound": "project-67dae74d410b461a",
+    "generation": 1,
+    "terminal": "t13"
+  },
+  "recoveredView": {
+    "busy": false,
+    "error": null,
+    "bound": "project-67dae74d410b461a",
+    "generation": 1,
+    "notice": "sent",
+    "terminal": "t13"
+  },
+  "commandsBeforeRetry": [
+    {
+      "command": "probe"
+    },
+    {
+      "command": "setup"
+    },
+    {
+      "command": "bind"
+    },
+    {
+      "command": "introduce"
+    },
+    {
+      "command": "introduce"
+    },
+    {
+      "command": "probe"
+    },
+    {
+      "command": "setup"
+    },
+    {
+      "command": "bind"
+    },
+    {
+      "command": "introduce"
+    }
+  ],
+  "commandsAddedByRetry": [
+    {
+      "command": "introduce"
+    }
+  ],
+  "commandsAfterRetry": [
+    {
+      "command": "probe"
+    },
+    {
+      "command": "setup"
+    },
+    {
+      "command": "bind"
+    },
+    {
+      "command": "introduce"
+    },
+    {
+      "command": "introduce"
+    },
+    {
+      "command": "probe"
+    },
+    {
+      "command": "setup"
+    },
+    {
+      "command": "bind"
+    },
+    {
+      "command": "introduce"
+    },
+    {
+      "command": "introduce"
+    }
+  ],
+  "receivingTerminalAck": {
+    "project": "project-67dae74d410b461a",
+    "terminal": "t13",
+    "generation": 1,
+    "skillLength": 1743,
+    "guideLength": 1564,
+    "subAgent": {
+      "backend": "pi",
+      "model": null
+    }
+  },
+  "handoffAck": {
+    "project": "project-67dae74d410b461a",
+    "terminal": "t14",
+    "generation": 2,
+    "skillLength": 1743,
+    "guideLength": 1564,
+    "subAgent": {
+      "backend": "pi",
+      "model": null
+    }
+  },
+  "firstBindRecovery": {
+    "commands": [
+      {
+        "command": "probe"
+      },
+      {
+        "command": "setup"
+      },
+      {
+        "command": "bind"
+      },
+      {
+        "command": "introduce"
+      },
+      {
+        "command": "introduce"
+      }
+    ],
+    "ack": {
+      "project": "project-67dae74d410b461a",
+      "terminal": "t13",
+      "generation": 1,
+      "skillLength": 1743,
+      "guideLength": 1564,
+      "subAgent": {
+        "backend": "pi",
+        "model": null
+      }
+    }
+  },
+  "cleanedUp": true,
+  "focusBefore": {
+    "zoom": 0.9,
+    "font_size": 12.6,
+    "ui_font_size": 11.7,
+    "space": "sp5e84ebb04e8cf89ea5f18bda761499c5",
+    "tab": "tb133f17202daeb53b9e195708306b2b12",
+    "focused_pane": "pe97971f7b62ffee02f9c02ed090018c4",
+    "layout": "sulan-tools",
+    "agent": "t8",
+    "floats": {},
+    "overlays": [],
+    "errors": []
+  },
+  "focusAfter": {
+    "zoom": 0.9,
+    "font_size": 12.6,
+    "ui_font_size": 11.7,
+    "space": "sp5e84ebb04e8cf89ea5f18bda761499c5",
+    "tab": "tb133f17202daeb53b9e195708306b2b12",
+    "focused_pane": "pe97971f7b62ffee02f9c02ed090018c4",
+    "layout": "sulan-tools",
+    "agent": "t8",
+    "floats": {},
+    "overlays": [],
+    "errors": []
+  },
+  "setupSha256": "4686102475b5de159e019be61763bb108e12602b3aa8db8ad6a71a61a2e162ea"
+}

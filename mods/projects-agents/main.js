@@ -1,6 +1,7 @@
 // Agents in grouped or priority views; parents take their most urgent sub-agent's place.
 
 import { View, div, image, svg } from "gpui-kit";
+import { projectRole, projectHint } from './roles.js';
 import { v_flex, h_flex } from "gpui-base";
 import { agents, terminals, panes, focused, spaces, run, theme, shared, setShared, setAgentOrder, openOverlay, closeOverlay, props, window, layout } from "herdr";
 
@@ -202,6 +203,7 @@ export default class Agents extends View {
         .when(l === "└" || l === "├", el => el.border_b(1.5).rounded_bl(6))))
       .when(Boolean(pic), el => el.child(div().mr(8).child(pic)))
       .child(div().flex_1().truncate().text_color(on ? t.foreground : t.muted).child(k.name || k.template || k.program?.name || k.address))
+      .when(Boolean(projectRole(k)),el=>el.child(div().px(5).py(2).mr(5).rounded(4).bg(t.raised).text_size(10).text_color(t.muted).tooltip(projectHint(k)).child(projectRole(k))))
       .child(this.status(t, { status: st }, compact));
   }
 
@@ -297,6 +299,7 @@ export default class Agents extends View {
 
     const row = (a, i, subs = []) => {
       const pic = icon(a.program, 16, t.foreground);
+      const terminal=all.find(x=>x.address===a.address),role=projectRole(terminal);
       const more = detail.get(a.address);
       // An agent on another machine (`vps/t7`) says which.
       const machine = a.address.includes("/") ? a.address.split("/")[0] : null;
@@ -365,7 +368,7 @@ export default class Agents extends View {
         .child(h_flex().flex_1().min_w(0).gap(5).items_center()
           .child(div().min_w(0).max_w(full && more ? 120 : 200).truncate().text_color(idle ? t.muted : t.foreground).child(name))
           .when(full && Boolean(more), el => el.child(div().flex_1().min_w(0).truncate().text_color(t.dim).child(`\u00b7 ${more}`))))
-        .when(all.find(x => x.address === a.address)?.labels?.['projects.role'] === 'main', el => el.child(div().text_size(10).text_color(t.muted).child('Leader')))
+        .when(Boolean(role), el => el.child(div().flex_none().px(5).py(2).rounded(4).bg(role==='PM'?t.selected:t.raised).text_size(10).text_color(role==='PM'?t.foreground:t.muted).tooltip(projectHint(terminal)).child(role)))
         .when(Boolean(machine), el => el.child(div().text_size(10).text_color(t.dim).child(machine)))
         .when(subs.length > 0, el => el.child(fold(a, subs)))
         .when(this.hovered === a.address, el => el.child(pin))

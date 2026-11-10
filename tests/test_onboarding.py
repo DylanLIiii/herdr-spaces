@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from herdr_projects import onboarding, runtime
+from herdr_projects import onboarding, runtime, manager
 from herdr_projects.store import Store, ProjectError, identity_from_env
 from scripts.install import runtime_bundle
 from scripts.bootstrap import prepare
@@ -47,6 +47,95 @@ class LeaderTests(unittest.TestCase):
         with self.assertRaises(ProjectError): self.bind(project='other')
         with self.assertRaises(ProjectError): onboarding.bind(self.store,'t1','core:wrong','p')
         self.assertEqual(['p'], [p['id'] for p in self.store.snapshot()['projects']])
+
+    def test_explicit_rebind_preserves_records_revokes_old_identity_and_rotates_generation(self):
+        original = self.bind()['project']
+        with patch.dict(os.environ, {'HC_TERMINAL_ID':'t1'}, clear=True):
+            old_identity = identity_from_env(self.store)
+            self.store.apply('p', 1, dict(requestId='task', op='todo.add', title='Keep me', sourceRef='user'), old_identity)
+        onboarding.notify(self.store, 'p', 'core:test', 1)
+        result = onboarding.bind(self.store, 't2', 'core:test', 'p', replace_generation=1)['project']
+        self.assertEqual(original['main']['id'], result['main']['id'])
+        self.assertEqual(2, result['main']['generation'])
+        self.assertEqual('Keep me', result['items'][0]['title'])
+        self.assertIsNone(result['main']['notice'])
+        self.assertIsNone(self.store.snapshot('t1', scopes=['core:test'])['binding'])
+        with self.assertRaises(ProjectError): self.store.check_main(self.store.get('p'), old_identity)
+        with patch.dict(os.environ, {'HC_TERMINAL_ID':'t1'}, clear=True):
+            self.assertIsNone(identity_from_env(self.store)['project'])
+        with patch.dict(os.environ, {'HC_TERMINAL_ID':'t2'}, clear=True):
+            self.store.check_main(self.store.get('p'), identity_from_env(self.store))
+        with self.assertRaises(ProjectError): onboarding.notify(self.store, 'p', 'core:test', 1)
+        self.assertEqual('sent', onboarding.notify(self.store, 'p', 'core:test', 2)['state'])
+        self.assertEqual('main.rebind', self.store.history('p')[0]['payload']['op'])
+        self.assertIn(['label', 't1', 'projects.role=former-main'], self.calls)
+        self.assertFalse(any(c[0] in ('run', 'kill', 'close') for c in self.calls))
+
+    def test_old_managed_process_exit_cannot_overwrite_rebound_pm(self):
+        self.store.create('p', 'Project', 'Goal', self.home)
+        with self.store.transaction():
+            p = self.store.get('p')
+            p['main'].update(state='starting', mode='managed', generation=1, token='old-token',
+                             scope='core:test', command=['fixture', '{context}'])
+            self.store.save(p)
+        def native_process(*args, **kwargs):
+            onboarding.bind(self.store, 't2', 'core:test', 'p', replace_generation=1)
+            return type('Exit', (), {'returncode':0})()
+        with patch.dict(os.environ, {'HC_TERMINAL_ID':'t1'}, clear=True), patch.object(runtime.subprocess, 'run', side_effect=native_process):
+            self.assertEqual(0, runtime.execute(self.store, 'p', 'old-token'))
+        p = self.store.get('p')
+        self.assertEqual(('running', 'attached', 't2', 2), tuple(p['main'][key] for key in ('state', 'mode', 'terminal', 'generation')))
+        self.assertNotIn('exitCode', p['main'])
+
+    def test_rebind_rejects_stale_generation_wrong_core_and_busy_introduction(self):
+        self.bind()
+        for options in ({'replace_generation':0}, {'replace_generation':2}):
+            with self.assertRaises(ProjectError): onboarding.bind(self.store, 't2', 'core:test', 'p', **options)
+        with patch.object(runtime, 'connected_scopes', return_value=['core:other']):
+            with self.assertRaises(ProjectError): onboarding.bind(self.store, 't2', 'core:other', 'p', replace_generation=1)
+        with runtime.lock(self.store, 'p-intro'):
+            with self.assertRaises(ProjectError): onboarding.bind(self.store, 't2', 'core:test', 'p', replace_generation=1)
+        self.assertEqual('t1', self.store.get('p')['main']['terminal'])
+        self.assertIsNone(self.store.snapshot('t2', scopes=['core:test'])['binding'])
+
+    def test_rebind_rejects_a_terminal_owned_by_another_project(self):
+        self.bind()
+        self.bind(project='other', terminal='t2')
+        with self.assertRaises(ProjectError): onboarding.bind(self.store, 't2', 'core:test', 'p', replace_generation=1)
+        self.assertEqual('t1', self.store.get('p')['main']['terminal'])
+
+    def test_exited_attached_terminal_can_be_rebound_explicitly(self):
+        self.bind()
+        with self.store.transaction():
+            p = self.store.get('p'); p['main'].update(state='exited', exitCode=1, endedAt='old'); self.store.save(p)
+        result = onboarding.bind(self.store, 't1', 'core:test', 'p', replace_generation=1)['project']
+        self.assertEqual(2, result['main']['generation'])
+        self.assertNotIn('exitCode', result['main'])
+        self.assertNotIn('endedAt', result['main'])
+
+    def test_pm_settings_persist_and_refresh_introduction_without_changing_identity(self):
+        self.bind()
+        onboarding.notify(self.store, 'p', 'core:test', 1)
+        result = onboarding.bind(self.store, 't1', 'core:test', 'p', replace_generation=1,
+                                 worker_backend='codex', worker_model='test-model')['project']
+        self.assertEqual(1, result['main']['generation'])
+        self.assertIsNone(result['main']['notice'])
+        self.assertEqual({'backend':'codex', 'model':'test-model'}, result['subAgent'])
+        self.assertIn('test-model', runtime.context(self.store, 'p'))
+        self.assertIn('skill --project p', onboarding.introduction(self.store, 'p'))
+        self.assertIn('完整读取', runtime.context(self.store, 'p'))
+        self.assertEqual(result['subAgent'], onboarding.setup(self.store, 't1')['projects'][0]['subAgent'])
+        with patch.object(runtime.shutil, 'which', return_value='/bin/codex'):
+            self.assertEqual(['codex', '--no-daemon', '--model', 'test-model', '{context}'], manager.worker_command(self.store.get('p')))
+
+    def test_invalid_skill_does_not_create_or_replace_a_project(self):
+        with self.assertRaises(OSError):
+            onboarding.bind(self.store, 't1', 'core:test', 'new', 'Name', 'Goal', str(self.home), pm_skill=str(self.home/'missing'))
+        self.assertEqual([], self.store.snapshot()['projects'])
+        self.bind()
+        with self.assertRaises(ProjectError):
+            onboarding.bind(self.store, 't2', 'core:test', 'p', replace_generation=1, pm_skill='relative/SKILL.md')
+        self.assertEqual('t1', self.store.get('p')['main']['terminal'])
 
     def test_terminal_derived_credentials_work_only_for_explicit_attached_leader(self):
         self.bind()
@@ -104,6 +193,9 @@ class PreparationTests(unittest.TestCase):
             self.assertEqual(first['command'],second['command'])
             self.assertFalse(Path(first['ledgerHome']).exists())
             self.assertTrue(Path(temp+'/config/herdr-spaces/runtimes/projects.json').is_file())
+            installed = Path(first['command'][1]).parent / 'herdr_projects/skills/project-manager'
+            self.assertEqual(manager.BUILTIN_SKILL.read_text(), (installed/'SKILL.md').read_text())
+            self.assertTrue((installed/'references/subagents.md').is_file())
 
     def test_preparation_upgrade_preserves_the_existing_custom_ledger(self):
         import sys

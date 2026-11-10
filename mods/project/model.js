@@ -1,9 +1,20 @@
 export const labels = {open:'待办', ready:'待执行', running:'进行中', blocked:'受阻', review:'待核验', accepted:'已完成', resolved:'已结案', cancelled:'已取消'};
 export function groups(items) {
-  return [['todo','待办',i=>i.kind==='todo'&&i.status==='open'],['ready','待执行',i=>i.status==='ready'],
-    ['active','进行中',i=>['running','blocked'].includes(i.status)],['review','待核验',i=>i.status==='review'],
+  return [['blocked','受阻',i=>i.status==='blocked'],['review','待核验',i=>i.status==='review'],
+    ['active','进行中',i=>i.status==='running'],['ready','待执行',i=>i.status==='ready'],['todo','待办',i=>i.kind==='todo'&&i.status==='open'],
     ['done','已完成',i=>['accepted','resolved'].includes(i.status)],['cancelled','已取消',i=>i.status==='cancelled']]
     .map(([id,title,test])=>({id,title,items:items.filter(test)})).filter(g=>g.items.length);
+}
+export function summary(items) {
+  const count=(states)=>items.filter(i=>states.includes(i.status)).length;
+  return {pending:count(['open','ready']),running:count(['running']),done:count(['accepted','resolved']),blocked:count(['blocked']),review:count(['review'])};
+}
+export function needsAttention(item){return ['blocked','review'].includes(item.status);}
+export function statusColor(status,t) {
+  if(['blocked','review'].includes(status))return t.blocked;
+  if(status==='running')return t.working;
+  if(['accepted','resolved'].includes(status))return t.done;
+  return t.muted;
 }
 export function findNode(node,id) {
   if (node?.id===id) return node;
