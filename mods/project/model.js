@@ -11,9 +11,17 @@ export function findNode(node,id) {
   return null;
 }
 export function location(focus, allPanes, allSpaces) {
-  const space=allSpaces.find(s=>s.active), pane=allPanes.find(p=>p.pane===focus?.pane);
-  const terminal=focus?.terminal || pane?.terminal || allPanes.find(p=>p.focused)?.terminal || null;
-  return {terminal, machine:space?.machine||null, space:space?.id||null};
+  const space=allSpaces.find(s=>s.active);
+  const terminal=focus ? focus.terminal : allPanes.find(p=>p.focused)?.terminal;
+  // A peek/layout terminal can belong to another machine than the active Space.
+  const parts=terminal?.split('/')||[];
+  const machine=terminal?(parts.length>1?parts[0]:null):space?.machine||null;
+  return {terminal:terminal||null, localTerminal:terminal?(parts.length>1?parts.slice(1).join('/'):terminal):null,
+    machine, space:space?.id||null};
+}
+export function terminalAddress(record, machine, scopes) {
+  if(!record?.terminal||record.terminal.includes('/')||(record.scope&&!scopes.includes(record.scope)))return null;
+  return machine?machine+'/'+record.terminal:record.terminal;
 }
 export function sessionStatus(record,live) {
   if (record.state==='exited') return '执行已退出';

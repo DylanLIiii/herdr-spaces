@@ -56,7 +56,8 @@ def main():
         checks.append(label); print('PASS ' + label, flush=True)
     project_cli = [sys.executable, str(ROOT / 'project.py'), '--home', str(ledger)]
     try:
-        installed = install(env['HERDR_APP_HOME'], scratch / 'bin', ledger)
+        installed = install(env['HERDR_APP_HOME'], scratch / 'bin', ledger,
+                            registry_dir=Path(env['XDG_CONFIG_HOME']) / 'herdr-spaces/runtimes')
         # First-run onboarding is unrelated to the plugin. Mark only this
         # temporary app home as skipped before opening its first window.
         (Path(env['HERDR_APP_HOME']) / 'shared.json').write_text(json.dumps({'frame.welcomed': 'skipped'}))

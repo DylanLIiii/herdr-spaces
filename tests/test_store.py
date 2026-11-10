@@ -12,6 +12,9 @@ from herdr_projects.runtime import context, start, reconcile, lock
 
 class LedgerTests(unittest.TestCase):
     def setUp(self):
+        self.scope_patch = patch('herdr_projects.runtime.connected_scopes', return_value=['core:test', 'default'])
+        self.scope_patch.start()
+        self.addCleanup(self.scope_patch.stop)
         self.tmp = tempfile.TemporaryDirectory()
         self.home = Path(self.tmp.name)
         self.store = Store(self.home)
@@ -134,6 +137,12 @@ class LedgerTests(unittest.TestCase):
         self.assertNotIn('owner-token', json.dumps(self.store.snapshot('t1', 'default')))
         with self.assertRaises(ProjectError):
             self.store.bind('two', 't1', 'default', 'main')
+
+    def test_duplicate_legacy_and_canonical_binding_is_not_guessed(self):
+        self.store.bind('two', 't1', 'core:test', 'main')
+        with self.assertRaisesRegex(ProjectError, 'Ambiguous'):
+            self.store.snapshot('t1', scopes=['core:test', 'default'])
+        self.assertEqual('two', self.store.snapshot('t1', scopes=['core:test'])['project']['id'])
 
     @patch('herdr_projects.runtime.hc')
     def test_second_main_does_not_launch(self, hc):

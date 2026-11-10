@@ -5,8 +5,10 @@ from pathlib import Path
 import sqlite3
 import sys
 
-from .store import ProjectError, Store, core_scope, identity_from_env
-from . import runtime
+from .store import ProjectError, Store, default_home, identity_from_env
+from . import __version__, runtime
+
+PROTOCOL_VERSION = 1
 
 OPERATIONS = {
     'todo.add': ['requestId', 'id?', 'title', 'sourceRef', 'brief?', 'nextAction?'],
@@ -41,6 +43,7 @@ def parser():
         create.add_argument('--' + field, required=True)
     create.add_argument('--pm', help='Explicit existing pm.md to link; never overwritten')
     commands.add_parser('list')
+    commands.add_parser('probe', help='Describe this machine\'s installed runtime without creating a ledger')
     commands.add_parser('operations', help='Describe JSON write operations')
     snap = commands.add_parser('snapshot', help='Read panel data bound to an exact terminal/core')
     snap.add_argument('--terminal')
@@ -64,6 +67,8 @@ def parser():
             sub.add_argument('--token', required=True)
         if name == 'read':
             sub.add_argument('--artifact', required=True)
+            sub.add_argument('--core-scope', help='Refuse if the connected core changed since the panel snapshot')
+            sub.add_argument('--ledger-home', help='Refuse if the selected ledger changed since the panel snapshot')
     return p
 
 
@@ -71,17 +76,27 @@ def main(argv=None):
     args = parser().parse_args(argv)
     store = None
     try:
-        if args.action == 'operations':
+        if args.action == 'probe':
+            result = dict(protocolVersion=PROTOCOL_VERSION, schemaVersion=1, version=__version__,
+                          ledgerHome=str(Path(args.home or default_home()).expanduser().resolve()))
+        elif args.action == 'operations':
             result = dict(operations=OPERATIONS, note='All apply requests require op, requestId and the current project revision. Call from the managed Main terminal. Replaying the same requestId/content is idempotent.')
         else:
-            store = Store(args.home)
             action = args.action
+            scopes = runtime.connected_scopes() if (action == 'snapshot' and args.terminal) or (action == 'read' and args.core_scope) else None
+            if action == 'read' and args.core_scope and args.core_scope != scopes[0]:
+                raise ProjectError('Connected core changed; refresh the project before reading evidence')
+            ledger_home = str(Path(args.home or default_home()).expanduser().resolve())
+            if action == 'read' and args.ledger_home and ledger_home != args.ledger_home:
+                raise ProjectError('Selected ledger changed; refresh the project before reading evidence')
+            store = Store(args.home)
             if action == 'create':
                 result = store.create(args.id, args.name, args.goal, args.cwd, args.pm)
             elif action == 'list':
                 result = store.snapshot()['projects']
             elif action == 'snapshot':
-                result = store.snapshot(args.terminal)
+                result = store.snapshot(args.terminal, scopes=scopes)
+                result.update(protocolVersion=PROTOCOL_VERSION, coreScopes=scopes or [], ledgerHome=ledger_home)
             elif action == 'show':
                 result = store.public(store.get(args.project))
             elif action == 'context':
@@ -106,6 +121,7 @@ def main(argv=None):
                 return runtime.execute(store, args.project, args.token, args.run)
             elif action == 'read':
                 result = store.read_artifact(args.project, args.artifact)
+                result.update(protocolVersion=PROTOCOL_VERSION, coreScope=scopes[0] if scopes else None, ledgerHome=ledger_home)
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0
     except (ProjectError, OSError, ValueError, sqlite3.Error) as exc:

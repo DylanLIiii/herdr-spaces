@@ -12,15 +12,19 @@ class InstallTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory(prefix='projects install ')
         self.root = Path(self.tmp.name)
         self.home, self.bin, self.data = [self.root / s for s in ('app', 'bin', 'data')]
+        self.registry = self.root / 'config/herdr-spaces/runtimes'
         self.home.mkdir()
         (self.home / 'settings.json').write_text('{"zoom":1.1}')
         (self.home / 'keys.json').write_text('existing keybindings')
+
+    def install(self, name='projects', **options):
+        return install(self.home, self.bin, self.data, name, registry_dir=self.registry, **options)
 
     def tearDown(self):
         self.tmp.cleanup()
 
     def test_install_preserves_settings_and_spaces_in_paths(self):
-        installed = install(self.home, self.bin, self.data)
+        installed = self.install()
         self.assertEqual('{"zoom":1.1}', (self.home / 'settings.json').read_text())
         self.assertEqual('existing keybindings', (self.home / 'keys.json').read_text())
         r = subprocess.run([installed['binary'], 'list'], capture_output=True, text=True)
@@ -31,21 +35,42 @@ class InstallTests(unittest.TestCase):
         self.assertNotIn('globalThis', Path(installed['panel'], 'main.js').read_text())
 
     def test_refuses_overwrite_without_partial_install(self):
-        installed = install(self.home, self.bin, self.data)
+        installed = self.install()
         before = {str(p.relative_to(self.home)): p.read_bytes() for p in self.home.rglob('*') if p.is_file()}
         with self.assertRaises(FileExistsError):
-            install(self.home, self.bin, self.data)
+            self.install()
         after = {str(p.relative_to(self.home)): p.read_bytes() for p in self.home.rglob('*') if p.is_file()}
         self.assertEqual(before, after)
         self.assertTrue(Path(installed['binary']).exists())
 
     def test_custom_name_rewrites_only_personal_mod_references(self):
-        installed = install(self.home, self.bin, self.data, 'trial')
+        installed = self.install('trial')
         js = Path(installed['tabs'], 'main.js').read_text()
         self.assertIn('mods/trial-panel/project.svg', js)
         self.assertIn('mods/trial-tabs/win-min.svg', js)
         self.assertIn('mods/files/file.svg', js)
         self.assertNotIn('mods/projects-tabs/', js)
+
+    def test_runtime_only_registers_target_paths_without_creating_ui_or_ledger(self):
+        installed = self.install(runtime_only=True)
+        self.assertFalse((self.home / 'mods').exists())
+        self.assertFalse((self.home / 'layouts').exists())
+        self.assertFalse(self.data.exists())
+        discovery = json.loads(Path(installed['discovery']).read_text())
+        result = subprocess.run(discovery['command'] + ['probe'], capture_output=True, text=True, check=True)
+        probe = json.loads(result.stdout)
+        self.assertEqual(1, probe['protocolVersion'])
+        self.assertEqual(str(self.data), probe['ledgerHome'])
+        self.assertFalse(self.data.exists())
+        self.assertEqual('{"zoom":1.1}', (self.home / 'settings.json').read_text())
+
+    def test_discovery_collision_does_not_create_runtime(self):
+        self.registry.mkdir(parents=True)
+        (self.registry / 'projects.json').write_text('existing')
+        with self.assertRaises(FileExistsError):
+            self.install(runtime_only=True)
+        self.assertFalse((self.home / 'projects-runtime').exists())
+        self.assertEqual('existing', (self.registry / 'projects.json').read_text())
 
 
 if __name__ == '__main__':

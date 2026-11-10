@@ -136,10 +136,14 @@ class Store:
             run.pop('token', None)
         return result
 
-    def snapshot(self, terminal=None, scope=None):
+    def snapshot(self, terminal=None, scope=None, scopes=None):
         projects = [self.public(json.loads(r[0])) for r in self.db.execute('SELECT body FROM projects ORDER BY id')]
-        binding = self.db.execute('SELECT * FROM bindings WHERE scope=? AND terminal=?',
-                                  (scope or core_scope(), terminal)).fetchone() if terminal else None
+        candidates = list(dict.fromkeys(scopes or [scope or core_scope()]))
+        bindings = [row for candidate in candidates if terminal for row in self.db.execute(
+            'SELECT * FROM bindings WHERE scope=? AND terminal=?', (candidate, terminal))]
+        if len(bindings) > 1:
+            raise ProjectError('Ambiguous legacy terminal binding; inspect the original core/ledger before continuing')
+        binding = bindings[0] if bindings else None
         project = next((p for p in projects if binding and p['id'] == binding['project_id']), None)
         return dict(schemaVersion=1, project=project, binding=dict(binding) if binding else None,
                     projects=[{k: p[k] for k in ('id', 'name', 'cwd')} for p in projects])

@@ -8,7 +8,7 @@ Projects 是一个独立插件工程：Python CLI 保存 SQLite 账本并通过�
 
 ## 项目与执行
 
-一个 Project 的 Main id 在创建时确定，终身归属于该项目。当前 terminal、core scope、generation、launch token 和 process state 独立于这个 id。Main 重启提升 generation；界面始终跟随显式 terminal binding，不根据仓库目录猜项目。
+一个 Project 的 Main id 在创建时确定，终身归属于该项目。当前 terminal、core scope、generation、launch token 和 process state 独立于这个 id。Main 重启提升 generation；界面始终跟随显式 terminal binding，不根据仓库目录猜项目。0.2 的新执行使用 `hc server status` 返回的持久 Core id 作为 scope；0.1 的环境 scope 保留兼容读取，多个匹配则拒绝猜测。
 
 `start` 在事务内预留 owner，再调用 `hc run --bg --keep --no-parent --no-notify`。独立 Python wrapper 将项目环境和启动上下文传给现有 Agent 程序，继承原生 PTY，不代理其输入输出。运行没有后台协调 daemon；窗口关闭后 core 继续承载程序，SQLite 保留记录。包装程序保留原生进程的 Ctrl+C 处理，避免 Python 的 KeyboardInterrupt 意外终止 Agent。
 
@@ -54,10 +54,12 @@ Project 面板和 Files / Changes 共用现有右侧槽位。独立的 projects-
 
 只轮询外部账本（可见时每 5 秒），终端/focus/theme 直接使用 Herdr 响应式数据。每次 terminal context 变化推进读取代次；迟到的异步结果不能替换另一个项目。读取失败展示明确错误及上次数据，关闭页面后的回调不会再提交 UI 状态。实际命令用 exec 的 argv 数组，无 shell 字符串拼接。
 
+远端请求使用 Herdr 已有的 `exec(..., {on: machine})` 通道。安装器在项目机器登记其自己的运行 argv；本机路径不跨机器使用。项目账本、文件与执行都在项目机器，客户端只有当前读取结果。scope 与 terminal 保留目标 Core 的本地形式，只有界面导航添加当前机器别名前缀。snapshot/read 带协议版本与来源标识，资料读取拒绝改变后的 Core/账本。详细配置见 [远程说明](remote.md)。
+
 面板只读，唯一操作是展开、预览、刷新及现有终端导航。没有第二个确认表单、消息输入或自动派发按钮。支持面板内 1/2/3 切换标签、上下选择、Enter 打开和 Esc 返回；不宣称完整屏幕阅读器支持。
 
 ## 后端适配
 
 基础启动以 argv 中的 `{context}` 替换值交代规则，不修改 backend 全局配置。用户可选择 Pi / Claude Code / Codex，或显式传入支持恢复的 argv。重读 `context` 是无 Hook 时的恢复路径。没有自动安装 SessionStart、PreToolUse、Stop 或 compaction Hooks；没有 Hook 完成闸门。
 
-首版运行程序依赖 POSIX `fcntl`，适用于 Linux/macOS，本轮实际验证目标为 Linux。远程 Space 和 Windows 不在本版运行范围；面板不会将远端 terminal 地址误当成本地项目。
+运行程序依赖 POSIX `fcntl`，适用于 Linux/macOS，实际验证目标为 Linux。0.2 支持 Herdr 机器连接上的远端项目，Main/Workers 仍在同一项目机器。Windows 运行程序和跨主机 Worker 调度尚未实现。

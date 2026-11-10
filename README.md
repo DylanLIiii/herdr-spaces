@@ -11,11 +11,12 @@ Herdr 的原生项目侧栏，以及由本项目 Main 维护的持久账本。�
 - **资料**：pm.md、决策和带来源/版本的产物，预览检测文件是否已改变。
 - 面板获得键盘焦点后，`1 / 2 / 3` 切换标签，方向键选择记录，Enter 打开，Esc 返回，`r` 刷新。
 - SQLite 保存项目、执行、账本版本、回报去重和修改记录。关闭窗口、结束 Worker 或重启 Main 不会清空项目。
+- **项目归属机器**：账本、pm.md、产物、Main 和 Workers 都留在项目所在机器。桌面侧栏通过 Herdr 已有机器连接读取，不复制或同步另一份账本。
 - 基础功能无需后端 Hooks。启动指令交代维护协议，Main 显式调用项目 CLI；自动压缩/恢复注入可另行适配。
 
 ## 安装
 
-需要 Linux 或 macOS、Python 3.10+、Herdr App 和 `hc`。运行没有 pip/npm 依赖；Node 仅用于开发测试。首版连接本机账本，远程 Space 会显示未支持提示。Worker 目前使用项目 cwd；不自动创建 worktree，也未接入 Coding Hub 的完整路由与调度。
+项目机器需要 Linux 或 macOS、Python 3.10+ 和 `hc`；桌面机器还需要支持远程 `exec({on})` 的 Herdr App。验证版本为 Herdr App 0.1.14 / hc 0.1.19。运行没有 pip/npm 依赖；Node 仅用于开发测试。Worker 使用项目 cwd；不自动创建 worktree，也未接入 Coding Hub 的完整路由与调度。
 
 ```sh
 git clone https://github.com/DylanLIiii/herdr-spaces.git
@@ -29,6 +30,24 @@ herdr-app do layout.switch '{"name":"projects"}'
 安装器复制独立运行程序到 app home，安装 `~/.local/bin/herdr-project`，创建个人 `projects` 布局和 `project` / `projects-tabs` mods。它不会改写内置 mods、settings、keys 或既有项目数据，也不自动切换正在使用的布局。同名目标存在时拒绝覆盖；升级预览使用 `--name projects-v2`，确认后再选择该布局。自定义名称的 CLI 为 `<name>-project`。
 
 可指定 `--home /app/home --bin-dir /bin/path --data-home /data/path`。本机生成的安装包含绝对 Python 路径；换机器应重新运行安装器。不要直接搬运安装后的布局文件。
+
+## 项目在远端服务器
+
+在服务器上克隆同一仓库，只安装运行程序：
+
+```sh
+git clone https://github.com/DylanLIiii/herdr-spaces.git
+cd herdr-spaces
+python3 scripts/install.py --runtime-only
+```
+
+这一步不安装桌面 mods 或布局。它登记该服务器的 Python、CLI 和账本路径，默认登记文件为 `~/.config/herdr-spaces/runtimes/projects.json`（遵循服务器的 `XDG_CONFIG_HOME`）。服务器的 Core 环境须能找到 `python3`。
+
+在本机按上面的完整安装步骤安装侧栏，并通过 Herdr 的 Add machine 或 `hc machine add SERVER` 连接服务器。随后**在服务器的原生终端中**运行下节的 create / start。侧栏跟随当前终端所属机器，自动读取对应账本；Main / Worker 导航也留在那台机器。
+
+多个客户端连接同一台项目机器会看到同一 Main 与记录。断线时已有记录标为上次数据，重连后重新读取；不会在本机另建 Main、接管或写入备份账本。一个项目的 Main 与 Workers 当前运行在同一台机器。
+
+如果安装使用自定义名称，两端默认使用相同 `--name`。自定义远端入口、升级和排障见 [远程接入说明](docs/remote.md)。
 
 ## 创建项目并启动 Main
 
@@ -50,7 +69,7 @@ herdr-project start --project my-project \
 
 `{context}` 必须独立出现一次，启动器会替换为项目规则与当前记录。启动器直接传 argv，不经过 shell 拼接。恢复参数由所选 backend 自己解释；Projects 不推断哪个历史 agent session 应该恢复。
 
-默认创建可被 Herdr 收纳的项目 Space/执行 Tab；使用 `--space <local-space-id> --tab <local-tab-id>` 可以收纳到指定位置。一个 Project 可以在多个 tab 执行；不以 cwd 判断项目归属，相同目录也可以属于多个项目。
+在项目机器创建可被 Herdr 收纳的项目 Space/执行 Tab；使用 `--space <local-space-id> --tab <local-tab-id>` 可以收纳到指定位置。一个 Project 可以在多个 tab 执行；不以 cwd 判断项目归属，相同目录也可以属于多个项目。
 
 再次调用 `start` 时，已有注册 Main 会返回原终端信息，不启动第二个。点击侧栏 Main 进入已有终端。项目创建不会自动请求模型，也不配置后端 Hooks。
 
@@ -114,7 +133,9 @@ python3 scripts/native_smoke.py --app /absolute/path/to/herdr-app
 
 最后一项在独立 Xvfb、core socket、app home 和数据目录中运行真实原生窗口，使用确定性测试程序验证 Main/Worker 记录，不调用任何付费模型。它要求 Linux、Xvfb 以及可运行的 Herdr App，结束后只关闭自己创建的进程。验证结果与已知限制记录在 [验证说明](docs/verification.md)。
 
-运行程序与安装器均包含在本仓库中。使用 `python3 scripts/package.py` 可生成 `dist/herdr-spaces-0.1.0.tar.gz` 安装归档。
+`python3 scripts/remote_smoke.py --app /absolute/path/to/herdr-app` 使用三个隔离 Core，通过真实 `hc machine --via` 连接验证两个客户端读取同一远端账本、原生导航和断线重连。它在同一台测试主机模拟机器边界，不替代真实 SSH / macOS 部署验证。
+
+运行程序与安装器均包含在本仓库中。使用 `python3 scripts/package.py` 可生成 `dist/herdr-spaces-0.2.0.tar.gz` 安装归档。
 
 ## 许可
 

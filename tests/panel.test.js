@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
-import { groups, sessionStatus } from '../mods/project/model.js';
+import { groups, sessionStatus, location } from '../mods/project/model.js';
 
 const fixture = id => ({id,name:id,goal:'A goal',cwd:'/repo',revision:3,
   main:{id:'main-'+id,state:'running',terminal:id+'-main'},
@@ -27,14 +27,14 @@ function find(root,key){if(root?.key===key)return root;for(const node of root?.n
 function allText(root){return typeof root==='string'?root:(root?.nodes||[]).map(allText).join(' ');}
 const turn=()=>new Promise(resolve=>setImmediate(resolve));
 
-async function host(){
-  const state={focus:{terminal:'a-main'},space:{id:'s1',active:true,machine:null},pending:[],calls:[],notify:0,live:[],closed:false};
+async function host(options={}){
+  const state={focus:{terminal:'a-main'},space:{id:'s1',active:true,machine:null},pending:[],calls:[],notify:0,live:[],closed:false,...options};
   const cx={notify:()=>state.notify++,stop_propagation(){},focus_handle:()=>({focus(){}}),timer:{every(){}},spawn(fn){fn(cx).catch(e=>{state.error=e;});}};
   const context=vm.createContext({console,Set,Map,JSON,Date});
   const exports={
     'gpui-kit':{View:class{},div:element,svg:element},
     'gpui-base':{h_flex:element,v_flex:element,TextView:{markdown:(_id,text)=>element().child(text)}},
-    herdr:{props:()=>({entry:'/app/project.py'}),exec:(_cmd,args)=>new Promise((resolve,reject)=>state.pending.push({args,resolve,reject})),
+    herdr:{props:()=>({entry:'/app/project.py',dataHome:'/local/ledger',...options.config}),exec:(command,args,opts)=>new Promise((resolve,reject)=>state.pending.push({command,args,options:opts,resolve,reject})),
       spaces:()=>[state.space],panes:()=>state.live.map(t=>({terminal:t.address})),focused:()=>state.focus,terminals:()=>state.live,
       theme:()=>({}),layout:()=>null,nextCommand:()=>new Promise(()=>{}),run:(name,args)=>state.calls.push({name,args})},
   };
@@ -44,11 +44,11 @@ async function host(){
     const m=new vm.SourceTextModule(await readFile(new URL(path,import.meta.url),'utf8'),{context,identifier:path});modules.set(path,m);
     await m.link(async spec=>{
       if(exports[spec]){const values=exports[spec];const module=new vm.SyntheticModule(Object.keys(values),function(){for(const [key,value]of Object.entries(values))this.setExport(key,value);},{context});return module;}
-      return load('../mods/project/model.js');
+      return load('../mods/project/'+spec.slice(2));
     });return m;
   };
   const m=await load('../mods/project/main.js');await m.evaluate();const view=new m.namespace.default();view.init(null,cx);
-  const respond=async(p,which=0)=>{const req=state.pending.splice(which,1)[0];req.resolve({code:0,stdout:JSON.stringify({project:p})});await turn();};
+  const respond=async(p,which=0,extra={})=>{const req=state.pending.splice(which,1)[0];req.resolve({code:0,stdout:JSON.stringify({project:p,protocolVersion:1,schemaVersion:1,coreScopes:['core:'+ (req.options.on||'local')],ledgerHome:req.options.on?'/remote/ledger':'/local/ledger',...extra})});await turn();};
   return {state,cx,view,respond};
 }
 
@@ -88,6 +88,62 @@ test('late result from another project cannot replace current terminal context',
 test('read errors show last known records without changing their truth',async()=>{
   const h=await host();await h.respond(fixture('a'));h.view.refresh(h.cx);h.state.pending.shift().reject(new Error('offline'));await turn();
   const root=h.view.render(h.cx);assert.match(allText(root),/上次记录/);assert.equal(h.view.project.items[1].status,'review');h.view.close();
+});
+
+test('remote terminal reads and navigation stay on the owning machine',async()=>{
+  const h=await host({focus:{pane:null,terminal:'server/t1'}});
+  const req=h.state.pending[0];assert.equal(req.options.on,'server');
+  assert.equal(req.args.at(-1),'t1');assert.ok(!req.args.includes('/local/ledger'));assert.ok(!req.args.includes('/app/project.py'));
+  const p=fixture('remote');p.main.terminal='t1';p.main.scope='core:server';p.runs[0].terminal='t2';p.runs[0].scope='core:server';
+  await h.respond(p);
+  h.state.live=[{address:'t2',status:'working'},{address:'other/t2',status:'working'},{address:'server/t2',status:'idle'}];
+  h.view.navigate(p.runs[0],h.cx);assert.equal(h.state.calls.at(-1).args.terminal,'server/t2');
+  h.view.tab='sessions';assert.match(allText(h.view.render(h.cx)),/空闲/);
+  const count=h.state.calls.length;h.view.navigate({...p.main,scope:'core:other'},h.cx);assert.equal(h.state.calls.length,count);
+  h.view.openFile('pm',h.cx);const read=h.state.pending[0];
+  assert.equal(read.options.on,'server');assert.ok(read.args.includes('core:server'));assert.ok(read.args.includes('/remote/ledger'));
+  await h.respond(null,0,{coreScope:'core:server',text:'remote evidence'});assert.equal(h.view.preview.text,'remote evidence');h.view.close();
+});
+
+test('peek machine follows focused terminal, including a local peek over a remote Space',()=>{
+  const spaces=[{id:'remote',active:true,machine:'server'}];
+  assert.equal(location({pane:null,terminal:'other/t1'},[],spaces).machine,'other');
+  assert.equal(location({pane:null,terminal:'t1'},[],spaces).machine,null);
+  assert.equal(location({pane:'mod',terminal:null},[{terminal:'server/t2',focused:true}],spaces).terminal,null);
+});
+
+test('same terminal and project ids on different machines cannot share a late response',async()=>{
+  const h=await host({focus:{terminal:'one/t1'}});
+  h.state.focus={terminal:'two/t1'};h.view.render(h.cx);
+  const p=fixture('same');p.goal='Machine two';await h.respond(p,1);
+  const old=fixture('same');old.goal='Machine one';await h.respond(old);
+  assert.equal(h.view.project.goal,'Machine two');assert.equal(h.view.origin.machine,'two');
+  h.view.openFile('pm',h.cx);h.state.focus={terminal:'one/t1'};
+  await h.respond(null,0,{coreScope:'core:two',text:'must not appear'});
+  assert.equal(h.view.preview,null);h.view.render(h.cx);assert.equal(h.view.project,null);h.view.close();
+});
+
+test('remote disconnect keeps marked stale data and never falls back to a local ledger',async()=>{
+  const h=await host({focus:{terminal:'server/t1'}});await h.respond(fixture('same'));
+  h.view.refresh(h.cx);const req=h.state.pending.shift();assert.equal(req.options.on,'server');req.reject(new Error('offline'));await turn();
+  assert.match(allText(h.view.render(h.cx)),/上次记录/);assert.equal(h.state.pending.length,0);
+  h.view.refresh(h.cx);assert.equal(h.state.pending[0].options.on,'server');
+  const fresh=fixture('same');fresh.revision=9;await h.respond(fresh);assert.equal(h.view.project.revision,9);assert.equal(h.view.error,null);h.view.close();
+});
+
+test('incompatible runtime fails explicitly and a changed core clears old evidence',async()=>{
+  const h=await host({focus:{terminal:'server/t1'}});await h.respond(fixture('a'),0,{protocolVersion:99});
+  assert.equal(h.view.project,null);assert.match(h.view.error,/版本不兼容/);
+  h.view.refresh(h.cx);await h.respond(fixture('a'));h.view.openFile('pm',h.cx);
+  h.view.refresh(h.cx);await h.respond(fixture('b'),1,{coreScopes:['core:replacement']});
+  await h.respond(null,0,{coreScope:'core:server',text:'stale evidence'});
+  assert.equal(h.view.project.id,'b');assert.equal(h.view.file,null);assert.equal(h.view.preview,null);assert.equal(h.view.busy,false);h.view.close();
+});
+
+test('custom remote command stays an argv array with spaces intact',async()=>{
+  const h=await host({focus:{terminal:'server/t1'},config:{remotes:{server:{command:['/opt/my runtime/herdr-project','--home','/srv/project data']}}}});
+  const req=h.state.pending[0];assert.equal(req.command,'/opt/my runtime/herdr-project');
+  assert.deepEqual([...req.args],['--home','/srv/project data','snapshot','--terminal','t1']);assert.equal(req.options.on,'server');h.view.close();
 });
 
 test('closing during a read prevents updates and renders no new composer',async()=>{

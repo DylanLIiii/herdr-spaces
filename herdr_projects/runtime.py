@@ -45,6 +45,19 @@ def hc(args):
     return data
 
 
+def connected_scopes(start_core=False):
+    """Use the core's durable identity, independent of shell/socket spelling.
+
+    Environment aliases only read/continue records written by version 0.1.
+    New reservations always use the core id, never a client's machine alias.
+    """
+    status = hc(['server', 'start' if start_core else 'status', '--json'])
+    core_id = status.get('core', {}).get('id')
+    if not isinstance(core_id, str) or not core_id:
+        raise ProjectError('Core did not return its identity; check the hc version')
+    return list(dict.fromkeys(['core:' + core_id, core_scope()]))
+
+
 def command(value, backend):
     argv = value if value is not None else [backend, '{context}']
     if not isinstance(argv, list) or not argv or any(not isinstance(x, str) or '\0' in x for x in argv):
@@ -119,9 +132,13 @@ def start(store, project_id, argv, space=None, tab=None, item_id=None, revision=
     for target in (space, tab):
         if target is not None:
             identifier(target)
-    scope = core_scope()
     key = project_id + ('-worker-' + item_id if item_id else '-main')
     with lock(store, key + '-launch'):
+        p = store.get(project_id)
+        if not item_id and p['main']['state'] not in ('inactive', 'exited'):
+            return dict(started=False, main=store.public(p)['main'], hint='An owner is already registered. Navigate to its terminal; use reconcile after an interrupted launch or exit.')
+        scopes = connected_scopes(start_core=True)
+        scope = scopes[0]
         with store.transaction():
             p = store.get(project_id)
             if item_id:
@@ -133,7 +150,7 @@ def start(store, project_id, argv, space=None, tab=None, item_id=None, revision=
                     raise ProjectError('Only a ready task without an active run can start')
                 if any(store.item(p, dep)['status'] not in ('accepted', 'resolved') for dep in item['dependencyIds']):
                     raise ProjectError('Dependencies are not accepted/resolved')
-                if p['main']['scope'] != scope:
+                if p['main']['scope'] not in scopes:
                     raise ProjectError('Use the project\'s own core session')
                 record = dict(id=uid('run'), workItemId=item_id, token=uid('token'), state='starting',
                               terminal=None, scope=scope, command=argv, createdAt=now(), reports=[])
@@ -237,7 +254,7 @@ def reconcile(store, project_id, run_id=None):
         raise ProjectError('Unknown run')
     if record['state'] == 'inactive':
         return store.public(p)
-    if record['scope'] != core_scope():
+    if record['scope'] not in connected_scopes():
         raise ProjectError('Reconcile must use the original core session')
     launch_key = project_id + ('-worker-' + record['workItemId'] if run_id else '-main')
     with lock(store, launch_key + '-launch'):

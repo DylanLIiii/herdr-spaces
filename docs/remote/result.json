@@ -1,0 +1,25 @@
+{
+  "passed": 16,
+  "checks": [
+    "Remote installation creates runtime only, without desktop files or a ledger",
+    "Core machine exec discovers target paths and compatible protocol",
+    "Main and Worker write only the project machine ledger",
+    "Same terminal and project ids on separate cores resolve to separate projects",
+    "Two clients with different machine aliases share one Main and core identity",
+    "Second client cannot create a duplicate Main",
+    "Evidence is read and hashed on the project machine",
+    "Neither client stores the remote evidence files",
+    "Remote native panel has no host errors or overlays",
+    "Native sidebar selects remote Worker despite a local address collision",
+    "Worker navigation returns to the remote project Main",
+    "Disconnected machine fails explicitly without local fallback",
+    "Disconnect does not terminate or replace the remote Main",
+    "Reconnect reads the same Main, ledger and generation",
+    "Reconnected native window has no host errors",
+    "Installed native mods pass Herdr check"
+  ],
+  "app": "herdr-app 0.1.14",
+  "core": "hc 0.1.19",
+  "transport": "real hc machine --via, loopback isolated cores; not SSH between physical hosts",
+  "synthetic": true
+}

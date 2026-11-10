@@ -1,7 +1,8 @@
 import { View, div, svg } from 'gpui-kit';
 import { h_flex, v_flex, TextView } from 'gpui-base';
 import { props, exec, spaces, panes, focused, terminals, theme, run, layout, nextCommand } from 'herdr';
-import { groups, labels, findNode, location, sessionStatus } from './model.js';
+import { groups, labels, findNode, location, sessionStatus, terminalAddress } from './model.js';
+import { endpoint, validateSnapshot } from './transport.js';
 
 const caption = (s,t) => div().text_size(11).text_color(t.muted).child(s);
 const paragraph = (s,t) => div().text_size(12).text_color(t.foreground).child(s);
@@ -12,7 +13,7 @@ const button = (id,label,action,t,selected=false) => h_flex().id(id).px(7).py(5)
 export default class Project extends View {
   init(initial,cx) {
     const p=initial??props()??{};
-    this.python=p.python||'python3'; this.entry=p.entry; this.dataHome=p.dataHome;
+    this.config=p; this.origin=null;
     this.closed=false; this.key=null; this.epoch=0; this.ticket=0; this.busy=false;
     this.project=null; this.error=null; this.tab='tasks'; this.detail=null; this.file=null; this.preview=null;
     this.folded=new Set(['done','cancelled']); this.selected=null; this.focus=cx.focus_handle();
@@ -33,41 +34,51 @@ export default class Project extends View {
   visible(){const root=layout(),panel=findNode(root,'panel'),body=findNode(root,'panel-body');return !panel||(!panel.hidden&&body?.active==='project');}
   currentLocation(){return location(focused(),panes(),spaces());}
   currentKey(){return JSON.stringify(this.currentLocation());}
-  async call(args) {
-    if(!this.entry)throw new Error('尚未安装运行入口。请运行项目安装器。');
-    const r=await exec(this.python,[this.entry,...(this.dataHome?['--home',this.dataHome]:[]),...args],{timeout:10000});
-    if(r.code!==0)throw new Error((r.stderr||r.stdout||'无法读取账本').slice(0,1500));
-    return JSON.parse(r.stdout);
+  async call(args,loc) {
+    const target=endpoint(this.config,loc.machine);
+    try {
+      const r=await exec(target.command,[...target.args,...args],{on:target.on,timeout:10000});
+      if(r.code!==0)throw new Error((r.stderr||r.stdout||'无法读取账本').slice(0,1500));
+      return JSON.parse(r.stdout);
+    } catch(e) {throw new Error((loc.machine?loc.machine:'本机')+'：'+String(e));}
   }
+  address(record){return this.origin?terminalAddress(record,this.origin.machine,this.origin.coreScopes):null;}
+  live(record){const address=this.address(record);return address?terminals().find(t=>t.address===address):null;}
   refresh(cx) {
     if(this.closed)return;
     const key=this.currentKey(), loc=this.currentLocation();
-    if(key!==this.key){this.key=key;this.epoch++;this.project=null;this.detail=null;this.file=null;this.preview=null;this.error=null;this.busy=false;this.tab='tasks';}
-    if(this.busy||loc.machine||!loc.terminal)return;
+    if(key!==this.key){this.key=key;this.epoch++;this.project=null;this.origin=null;this.detail=null;this.file=null;this.preview=null;this.error=null;this.busy=false;this.tab='tasks';this.selected=null;}
+    if(this.busy||!loc.terminal)return;
     const epoch=this.epoch, ticket=++this.ticket;
     this.busy=true;
     cx.spawn(async cx=>{
       try {
-        const snapshot=await this.call(['snapshot','--terminal',loc.terminal]);
+        const snapshot=validateSnapshot(await this.call(['snapshot','--terminal',loc.localTerminal],loc));
         if(this.closed||epoch!==this.epoch||key!==this.currentKey()||ticket!==this.ticket)return;
-        this.project=snapshot.project;this.error=null;
-      } catch(e) {if(!this.closed&&epoch===this.epoch&&ticket===this.ticket)this.error=String(e);}
+        const changed=this.origin&&(this.origin.coreScopes[0]!==snapshot.coreScopes[0]||this.origin.ledgerHome!==snapshot.ledgerHome||this.project?.id!==snapshot.project?.id);
+        if(changed){this.epoch++;this.detail=null;this.file=null;this.preview=null;this.busy=false;}
+        this.project=snapshot.project;this.origin={...loc,coreScopes:snapshot.coreScopes,ledgerHome:snapshot.ledgerHome};this.error=null;cx.notify();
+      } catch(e) {if(!this.closed&&epoch===this.epoch&&key===this.currentKey()&&ticket===this.ticket)this.error=String(e);}
       finally {if(!this.closed&&epoch===this.epoch&&ticket===this.ticket){this.busy=false;cx.notify();}}
     });
   }
   navigate(record,cx) {
-    const live=terminals().find(t=>t.address===record?.terminal);
-    if(!live){this.error='此执行终端已退出或不可访问。项目记录仍保留；请从终端使用 herdr-project start / reconcile 恢复。';cx.notify();return;}
-    if(panes().some(p=>p.terminal===record.terminal))run('pane.focus',{terminal:record.terminal});
-    else run('terminal.peek',{terminal:record.terminal});
+    if(this.key!==this.currentKey()){this.refresh(cx);return;}
+    const address=this.address(record),live=this.live(record);
+    if(!live){this.error='此执行终端已退出或不可访问。项目记录仍保留；请在项目所在机器使用 herdr-project start / reconcile 恢复。';cx.notify();return;}
+    if(panes().some(p=>p.terminal===address))run('pane.focus',{terminal:address});
+    else run('terminal.peek',{terminal:address});
   }
   openFile(id,cx) {
+    if(!this.origin||this.key!==this.currentKey()){this.refresh(cx);return;}
     this.file=id;this.detail=null;this.preview=null;
-    const epoch=this.epoch,projectId=this.project.id;
+    const epoch=this.epoch,projectId=this.project.id,key=this.key,origin=this.origin;
+    const current=()=>!this.closed&&this.epoch===epoch&&key===this.currentKey()&&this.file===id;
     cx.spawn(async cx=>{
-      try {const data=await this.call(['read','--project',projectId,'--artifact',id]);
-        if(!this.closed&&this.epoch===epoch&&this.file===id)this.preview=data;
-      } catch(e){if(!this.closed&&this.epoch===epoch&&this.file===id)this.preview={error:String(e)};}
+      try {const data=await this.call(['read','--project',projectId,'--artifact',id,'--core-scope',origin.coreScopes[0],'--ledger-home',origin.ledgerHome],origin);
+        if(data.protocolVersion!==1||data.coreScope!==origin.coreScopes[0]||data.ledgerHome!==origin.ledgerHome)throw new Error('资料来源已改变，请刷新项目记录。');
+        if(current())this.preview=data;
+      } catch(e){if(current())this.preview={error:String(e)};}
       if(!this.closed)cx.notify();
     });cx.notify();
   }
@@ -109,7 +120,7 @@ export default class Project extends View {
       .when(!this.folded.has(g.id),el=>el.children(g.items.map(i=>this.itemRow(i,t))))));
   }
   sessionRow(p,record,isMain,t) {
-    const live=terminals().find(t=>t.address===record.terminal),item=p.items.find(i=>i.id===record.workItemId);
+    const live=this.live(record),item=p.items.find(i=>i.id===record.workItemId);
     return v_flex().id('session-'+record.id).px(6).py(8).gap(4).rounded(6).bg(this.selected==='session:'+record.id?t.selected:t.background).cursor_pointer().hover(s=>s.bg(t.hover))
       .on_click((_e,cx)=>this.navigate(record,cx))
       .child(h_flex().gap(8).child(div().flex_1().min_w(0).truncate().child(isMain?'Main':item?.title||record.id))
@@ -119,7 +130,7 @@ export default class Project extends View {
   sessions(p,t) {
     const workers=p.runs.slice().reverse();
     const groupsByStatus=new Map();
-    for(const r of workers){const label=sessionStatus(r,terminals().find(t=>t.address===r.terminal));if(!groupsByStatus.has(label))groupsByStatus.set(label,[]);groupsByStatus.get(label).push(r);}
+    for(const r of workers){const label=sessionStatus(r,this.live(r));if(!groupsByStatus.has(label))groupsByStatus.set(label,[]);groupsByStatus.get(label).push(r);}
     return v_flex().child(this.section('Main',[this.sessionRow(p,p.main,true,t)],t))
       .children([...groupsByStatus].map(([label,list])=>this.section(label+' · '+list.length,list.map(r=>this.sessionRow(p,r,false,t)),t)))
       .child(caption('会话状态来自执行端；是否完成以任务账本为准。',t));
@@ -170,8 +181,8 @@ export default class Project extends View {
         .child(div().flex_1().font_semibold().child('Project'))
         .child(button('project-refresh','↻',(_e,cx)=>this.refresh(cx),t)).child(row));
     if(this.error)root.child(div().flex_none().p(12).text_color(t.blocked).child((p?'刷新失败，以下是上次记录。\n':'')+this.error));
-    if(!p)return root.child(v_flex().p(14).gap(12).child(paragraph(loc.machine?'此版本只连接本机账本，请在项目所在机器安装 Projects。':this.busy?'读取项目记录…':'此终端尚未关联项目。',t))
-      .child(caption('在原生终端创建项目并启动其 Main：',t)).child(paragraph('herdr-project create my-project --name "项目名" --goal "项目目标" --cwd /path/to/repo',t))
+    if(!p)return root.child(v_flex().p(14).gap(12).child(paragraph(this.busy?'读取项目记录…':this.error?'项目记录暂不可用。':'此终端尚未关联项目。',t))
+      .child(caption('在'+(loc.machine||'本机')+'的原生终端创建项目并启动其 Main：',t)).child(paragraph('herdr-project create my-project --name "项目名" --goal "项目目标" --cwd /path/to/repo',t))
       .child(paragraph('herdr-project start --project my-project --backend pi',t)));
     const summary=groups(p.items).filter(g=>g.id!=='cancelled').map(g=>g.items.length+' '+g.title).join(' · ');
     root.child(v_flex().flex_none().px(14).py(12).gap(7).child(div().font_semibold().text_size(13).child(p.name))
@@ -185,7 +196,7 @@ export default class Project extends View {
     const item=p.items.find(i=>i.id===this.detail);
     root.child(v_flex().id('project-content').flex_1().min_h(0).overflow_y_scrollbar().p(10)
       .child(this.file?this.artifactDetail(p,t):item?this.taskDetail(p,item,t):this.tab==='sessions'?this.sessions(p,t):this.tab==='files'?this.files(p,t):this.tasks(p,t)))
-      .child(div().flex_none().px(14).py(9).border_t(1).border_color(t.border).text_size(11).text_color(t.muted).child('本项目 Main · 账本修订 '+p.revision));
+      .child(div().flex_none().px(14).py(9).border_t(1).border_color(t.border).text_size(11).text_color(t.muted).child((this.origin?.machine||'本机')+' · 账本修订 '+p.revision));
     return root;
   }
 }
