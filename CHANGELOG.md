@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.1
+
+- Fix Leader setup failing with `No such file or directory: 'hc'` when the project's background environment omits the user install directory from PATH. Discover Herdr Core from PATH, `HC_INSTALL_DIR`, or `~/.local/bin`, including installations without the optional `hc` alias; validate its version before use.
+- Upgrade existing 0.3.0 project runtimes during Leader setup instead of reusing their PATH-dependent implementation. Preserve the registered ledger directory and existing files.
+- Add `--remote-name` to retain the remote registration when installing a new personal desktop layout. No Core restart or shell configuration change is required.
+
 ## 0.3.0
 
 - Right-click an existing Agent to designate it as Project Leader, then choose or create a project in a native form. The original terminal and session stay in place.

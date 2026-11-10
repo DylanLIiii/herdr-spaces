@@ -44,6 +44,10 @@ export async function callRuntime(config,args,loc,exec) {
   return JSON.parse(r.stdout);
 }
 
+export function supportsLeaderSetup(probe) {
+  return ['leader-bind','core-command-discovery'].every(feature=>probe?.capabilities?.includes(feature));
+}
+
 export async function prepareRuntime(config,loc,exec,readTextFile) {
   const custom=config.remotes?.[loc.machine];
   if(custom?.command)throw new Error('请先在项目机器更新自定义运行入口，然后重试。');

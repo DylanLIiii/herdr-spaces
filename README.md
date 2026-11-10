@@ -34,6 +34,8 @@ herdr-app do layout.switch '{"name":"projects"}'
 
 可指定 `--home /app/home --bin-dir /bin/path --data-home /data/path`。本机生成的安装包含绝对 Python 路径；换机器应重新运行安装器。不要直接搬运安装后的布局文件。
 
+0.3.0 用户若遇到 `No such file or directory: 'hc'`，请按 [0.3.1 升级说明](docs/onboarding.md) 更新桌面插件；重新打开 Leader 设置时会自动修复旧远端运行程序，保留项目记录。
+
 ## 在界面中开始使用
 
 1. 在 Herdr 中打开项目机器上的 Agent，继续使用它的原生终端。
@@ -153,7 +155,7 @@ python3 scripts/native_smoke.py --app /absolute/path/to/herdr-app
 
 `python3 scripts/remote_smoke.py --app /absolute/path/to/herdr-app` 使用三个隔离 Core，通过真实 `hc machine --via` 连接验证两个客户端读取同一远端账本、原生导航和断线重连。它在同一台测试主机模拟机器边界，不替代真实 SSH / macOS 部署验证。
 
-运行程序与安装器均包含在本仓库中。使用 `python3 scripts/package.py` 可生成 `dist/herdr-spaces-0.3.0.tar.gz` 安装归档。
+运行程序与安装器均包含在本仓库中。使用 `python3 scripts/package.py` 可生成 `dist/herdr-spaces-0.3.1.tar.gz` 安装归档。
 
 ## 许可
 

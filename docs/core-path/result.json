@@ -1,0 +1,29 @@
+{
+  "passed": 18,
+  "checks": [
+    "Target background PATH has neither hc nor herdr-core",
+    "Real machine exec preserves the restricted target environment",
+    "The seeded runtime has Leader support but lacks Core path discovery",
+    "Previous runtime reproduces the reported missing hc error",
+    "Viewing a machine does not silently install or upgrade its runtime",
+    "Left Agent right-click opens the Leader entry",
+    "Setup automatically installs only on the selected machine",
+    "Automatic upgrade keeps the custom ledger and its files",
+    "The prepared runtime advertises Core path discovery",
+    "Binding reuses the original terminal and stable Main identity",
+    "Existing Agent reads context and writes through terminal-bound identity",
+    "Only one visible introduction is recorded",
+    "The left Agent has a persistent Leader label",
+    "No replacement Agent was launched",
+    "Native setup closes without host errors or a docked settings copy",
+    "Setup is only a dialog and never inserts itself into the workspace",
+    "Leader setup fits a narrow window and closes by keyboard",
+    "All four installed native mods pass check"
+  ],
+  "app": "herdr-app 0.1.14",
+  "core": "hc 0.1.19",
+  "synthetic": true,
+  "restrictedPath": true,
+  "legacyUpgrade": true,
+  "transport": "isolated cores with real machine --via, existing deterministic Agent, no LLM"
+}

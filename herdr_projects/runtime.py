@@ -4,6 +4,7 @@ import fcntl
 import json
 import os
 from pathlib import Path
+import re
 import shlex
 import shutil
 import signal
@@ -31,11 +32,51 @@ def lock(store, key):
             fcntl.flock(handle, fcntl.LOCK_UN)
 
 
+def core_command():
+    """Resolve Herdr on the execution machine without a login shell or PATH edits.
+
+    Herdr installs `herdr-core`; the optional `hc` link may be absent or owned
+    by another program. Only run core requests after confirming --version.
+    An explicit override is authoritative and is never silently replaced.
+    """
+    override = os.environ.get('HERDR_PROJECTS_HC')
+    candidates = []
+    if override:
+        candidates.append(str(Path(override).expanduser()))
+    else:
+        directory = os.environ.get('HC_INSTALL_DIR')
+        if directory:
+            candidates.extend(str(Path(directory).expanduser() / name) for name in ('herdr-core', 'hc'))
+        candidates.extend(path for name in ('herdr-core', 'hc') if (path := shutil.which(name)))
+        candidates.extend(str(Path.home() / '.local/bin' / name) for name in ('herdr-core', 'hc'))
+    checked = set()
+    for candidate in candidates:
+        path = shutil.which(candidate)
+        if not path:
+            continue
+        path = str(Path(path).absolute())
+        if path in checked:
+            continue
+        checked.add(path)
+        try:
+            result = subprocess.run([path, '--version'], capture_output=True, text=True, timeout=3)
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+        if result.returncode == 0 and re.match(r'^(?:hc|herdr-core) \d+\.\d+\.\d+\b', result.stdout.strip()):
+            return path
+    if override:
+        raise ProjectError('配置的 HERDR_PROJECTS_HC 不是可用的 Herdr Core 程序，请检查项目机器上的路径。')
+    raise ProjectError('未找到可用的 Herdr Core 程序。已检查后台 PATH 和用户安装目录；自定义安装请在项目机器设置 HERDR_PROJECTS_HC 为程序绝对路径。')
+
+
 def hc(args):
+    executable = core_command()
     try:
-        result = subprocess.run([os.environ.get('HERDR_PROJECTS_HC', 'hc'), *args], capture_output=True, text=True, timeout=30)
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        raise ProjectError(f'Core unavailable or launch outcome uncertain: {exc}') from exc
+        result = subprocess.run([executable, *args], capture_output=True, text=True, timeout=30)
+    except OSError as exc:
+        raise ProjectError(f'无法启动项目机器的 Herdr Core 程序：{exc}') from exc
+    except subprocess.TimeoutExpired as exc:
+        raise ProjectError('Core 请求超时。请检查连接；启动操作可能已送达，不要重复启动。') from exc
     try:
         data = json.loads(result.stdout)
     except ValueError as exc:

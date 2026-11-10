@@ -1,5 +1,21 @@
 # 指定 Project Leader
 
+## 修复 0.3.0 的 hc 查找错误
+
+如果设置窗口显示 `No such file or directory: 'hc'`，表示项目运行程序已经启动，但它的后台环境找不到 Core 命令。这与交互式 shell 的 PATH 可以不同；不代表服务器的 Core 没有运行。官方安装通常提供 `~/.local/bin/herdr-core`，`hc` 只是可选别名。
+
+0.3.1 会查找并验证现有程序，支持后台 PATH、`HC_INSTALL_DIR` 和 `~/.local/bin`，也接受项目机器上的 `HERDR_PROJECTS_HC` 显式路径。不会启动登录 shell、改 PATH、安装或重启 Core。若显式指定的程序无效会报错，不静默换用另一个程序。
+
+已按此前说明安装 `spaces-v03` 的用户，在桌面机器的仓库中执行：
+
+```sh
+git pull --ff-only
+python3 scripts/install.py --name spaces-v031 --remote-name spaces-v03
+herdr-app do layout.switch '{"name":"spaces-v031"}'
+```
+
+重新打开“设为 Project Leader”。它会检查原远端登记，自动切换到修复后的项目运行程序，并保留该登记的账本路径。`--remote-name` 填原布局的 `remoteName`；若原安装一直用默认 `projects`，上例改成 `--remote-name projects`。自定义 `remotes` 配置仍需保留。不要删除账本或重新创建项目来绕过这个错误。
+
 ## 为什么旧版出现安装错误
 
 0.2 侧栏需要在目标机器找到 `herdr-spaces/runtimes/projects.json`，但把缺少登记的首次使用状态当成了普通执行错误，显示红色错误和 CLI 命令。缺少登记通常表示服务器未安装运行程序，也可能是安装名称或 Core 的 XDG 配置目录不同。它不代表项目数据丢失。

@@ -56,6 +56,22 @@ class InstallTests(unittest.TestCase):
         self.assertIn('mods/files/file.svg', js)
         self.assertNotIn('mods/projects-tabs/', js)
 
+    def test_new_desktop_layout_keeps_the_existing_remote_registration_name(self):
+        installed = self.install('spaces-v031', remote_name='spaces-v03')
+        layout = json.loads(Path(installed['layout']).read_text())
+        configs = []
+        def walk(node):
+            content = node.get('content', {})
+            if content.get('mod') in ('spaces-v031-panel', 'spaces-v031-agents'):
+                configs.append(content['props'])
+            for child in node.get('children', []):
+                walk(child)
+        walk(layout)
+        self.assertEqual(2, len(configs))
+        self.assertTrue(all(config['remoteName'] == 'spaces-v03' for config in configs))
+        self.assertTrue((self.registry / 'spaces-v031.json').exists())
+        self.assertFalse((self.registry / 'spaces-v03.json').exists())
+
     def test_runtime_only_registers_target_paths_without_creating_ui_or_ledger(self):
         installed = self.install(runtime_only=True)
         self.assertFalse((self.home / 'mods').exists())

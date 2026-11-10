@@ -89,7 +89,7 @@ def main(argv=None):
     try:
         if args.action == 'probe':
             result = dict(protocolVersion=PROTOCOL_VERSION, schemaVersion=1, version=__version__,
-                          ledgerHome=str(Path(args.home or default_home()).expanduser().resolve()), capabilities=['leader-bind', 'guarded-introduction'])
+                          ledgerHome=str(Path(args.home or default_home()).expanduser().resolve()), capabilities=['leader-bind', 'guarded-introduction', 'core-command-discovery'])
         elif args.action == 'operations':
             result = dict(operations=OPERATIONS, note='All apply requests require op, requestId and the current project revision. Call from the managed Main terminal. Replaying the same requestId/content is idempotent.')
         else:

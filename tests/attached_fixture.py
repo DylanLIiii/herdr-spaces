@@ -13,7 +13,9 @@ for line in sys.stdin:
     if ' context --project ' not in line:
         continue
     command = shlex.split(line.strip())
-    if not command or command[0] != sys.executable:
+    registration = Path(os.environ['XDG_CONFIG_HOME']) / 'herdr-spaces/runtimes/projects.json'
+    registered = json.loads(registration.read_text())['command']
+    if command[:len(registered)] != registered:
         continue
     result = subprocess.run(command, capture_output=True, text=True, timeout=10)
     assert result.returncode == 0, result.stderr

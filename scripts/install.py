@@ -21,8 +21,9 @@ def runtime_bundle():
     return dict(files=files, sha256=digest)
 
 
-def install(home, bin_dir, data_home, name='projects', *, runtime_only=False, registry_dir=None):
-    if not re.fullmatch(r'[a-z][a-z0-9-]{0,39}', name):
+def install(home, bin_dir, data_home, name='projects', *, runtime_only=False, registry_dir=None, remote_name=None):
+    remote_name = remote_name or name
+    if not all(re.fullmatch(r'[a-z][a-z0-9-]{0,39}', value) for value in (name, remote_name)):
         raise ValueError('Invalid installation name')
     home, bin_dir, data_home = [Path(p).expanduser().resolve() for p in (home, bin_dir, data_home)]
     registry = Path(registry_dir or Path(os.environ.get('XDG_CONFIG_HOME', Path.home() / '.config')) / 'herdr-spaces/runtimes').expanduser().resolve()
@@ -51,7 +52,7 @@ def install(home, bin_dir, data_home, name='projects', *, runtime_only=False, re
         (runtime / 'runtime-bundle.json').write_text(json.dumps(runtime_bundle()))
         command = [sys.executable, str(runtime / 'project.py'), '--home', str(data_home)]
         manifest = dict(name=name, home=str(home), dataHome=str(data_home), binary=str(binary),
-                        runtime=str(runtime), discovery=str(discovery), command=command, runtimeOnly=runtime_only)
+                        runtime=str(runtime), discovery=str(discovery), command=command, runtimeOnly=runtime_only, remoteName=remote_name)
         if not runtime_only:
             for mod, target in [('project', panel_path), ('projects-tabs', tabs_path), ('projects-agents', agents_path), ('project-setup', setup_path)]:
                 target.parent.mkdir(parents=True, exist_ok=True)
@@ -70,7 +71,7 @@ def install(home, bin_dir, data_home, name='projects', *, runtime_only=False, re
                     shutil.copy2(ROOT / notice, target / notice)
             layout = json.loads((ROOT / 'layouts/projects.json').read_text())
             config = dict(python=sys.executable, entry=str(runtime / 'project.py'), dataHome=str(data_home),
-                          remoteName=name, setupMod=setup, agentsMod=agents,
+                          remoteName=remote_name, setupMod=setup, agentsMod=agents,
                           bundle=str(runtime / 'runtime-bundle.json'), bootstrap=str(runtime / 'bootstrap.py'))
             def walk(node):
                 content = node.get('content', {})
@@ -112,12 +113,13 @@ if __name__ == '__main__':
     parser.add_argument('--bin-dir', default=str(Path.home() / '.local/bin'))
     parser.add_argument('--data-home', default=os.environ.get('HERDR_PROJECTS_HOME', str(Path(os.environ.get('XDG_DATA_HOME', Path.home() / '.local/share')) / 'herdr-projects')))
     parser.add_argument('--name', default='projects')
+    parser.add_argument('--remote-name', help='Keep the existing remote runtime registration name when installing a new desktop layout')
     parser.add_argument('--runtime-only', action='store_true', help='Install CLI/runtime on the project machine without desktop mods or layouts')
     parser.add_argument('--registry-dir', help='Override discovery directory; the default is the target machine XDG config/herdr-spaces/runtimes')
     args = parser.parse_args()
     try:
         print(json.dumps(install(args.home, args.bin_dir, args.data_home, args.name,
-                                 runtime_only=args.runtime_only, registry_dir=args.registry_dir), indent=2))
+                                 runtime_only=args.runtime_only, registry_dir=args.registry_dir, remote_name=args.remote_name), indent=2))
     except (OSError, ValueError) as exc:
         print(str(exc), file=sys.stderr)
         raise SystemExit(1)

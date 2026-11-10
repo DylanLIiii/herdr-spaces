@@ -22,6 +22,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--app', required=True)
     parser.add_argument('--output', default=str(ROOT / 'docs/onboarding'))
+    parser.add_argument('--restricted-path', action='store_true', help='Target has herdr-core only in its user install directory, outside PATH')
+    parser.add_argument('--legacy-source', help='Seed a prior source snapshot to test automatic upgrade while preserving its custom ledger')
     args = parser.parse_args()
     output = Path(args.output).resolve(); output.mkdir(parents=True, exist_ok=True)
     scratch = Path(tempfile.mkdtemp(prefix='spaces-onboarding-'))
@@ -32,11 +34,23 @@ def main():
             extra[key]=str(scratch/name/part);Path(extra[key]).mkdir(parents=True,mode=0o700)
         return base|extra,extra
     client,_ = environment('client'); server,settings = environment('server')
+    core_binary = shutil.which('hc')
+    if not core_binary:
+        raise RuntimeError('Test requires an installed hc')
+    if args.restricted_path:
+        server_home = scratch / 'server/home'
+        installed_core = server_home / '.local/bin/herdr-core'
+        installed_core.parent.mkdir(parents=True)
+        shutil.copy2(Path(core_binary).resolve(), installed_core)
+        restricted = dict(HOME=str(server_home), PATH='/usr/bin:/bin')
+        server.update(restricted); settings.update(restricted)
     app = str(Path(args.app).resolve()); pointer=window=display=None;checks=[]
     bridge=scratch/'bridge.py';bridge.write_text(BRIDGE)
     configuration=scratch/'server.json';configuration.write_text(json.dumps(settings))
     gate=scratch/'disconnected'
     def call(argv,env=client,ok=True):
+        if argv[0] == 'hc':
+            argv = [core_binary, *argv[1:]]  # Harness only; never given to the project runtime.
         result=subprocess.run(argv,env=env,capture_output=True,text=True,timeout=20)
         if ok and result.returncode:raise RuntimeError(str(argv[:3])+': '+result.stderr+result.stdout)
         return result
@@ -60,7 +74,27 @@ def main():
         terminal=jcall(['hc','run','--bg','--keep','--no-parent','--no-notify','--cwd',str(scratch/'server'),
                         '--label','herdr.space=existing','--label','herdr.tab=agent','--',sys.executable,str(fixture),str(scratch/'server')],env=server)['address']
         registry=Path(server['XDG_CONFIG_HOME'])/'herdr-spaces/runtimes/projects.json'
-        check('Existing remote Agent starts without any Projects runtime or ledger',not registry.exists())
+        previous_registration = None
+        if args.restricted_path:
+            check('Target background PATH has neither hc nor herdr-core',shutil.which('hc',path=server['PATH']) is None and shutil.which('herdr-core',path=server['PATH']) is None)
+            remote_env = jcall(['hc','exec','--on','gpu-fixture','--','python3','-c','import json,os,shutil; print(json.dumps(dict(hc=shutil.which("hc"), core=shutil.which("herdr-core"), home=os.environ["HOME"])))'])
+            check('Real machine exec preserves the restricted target environment',remote_env['hc'] is None and remote_env['core'] is None and remote_env['home'] == server['HOME'])
+        if args.legacy_source:
+            legacy = scratch / 'server/legacy-runtime'
+            shutil.copytree(Path(args.legacy_source).resolve(), legacy, ignore=shutil.ignore_patterns('.git','__pycache__'))
+            custom_ledger = scratch / 'server/custom ledger'
+            custom_ledger.mkdir(); (custom_ledger / 'preserved.txt').write_text('existing project files')
+            registry.parent.mkdir(parents=True, exist_ok=True)
+            legacy_command = [sys.executable, str(legacy / 'project.py'), '--home', str(custom_ledger)]
+            registry.write_text(json.dumps(dict(protocolVersion=1,command=legacy_command)))
+            previous_registration = registry.read_text()
+            old_probe = jcall(legacy_command + ['probe'],env=server)
+            check('The seeded runtime has Leader support but lacks Core path discovery','leader-bind' in old_probe['capabilities'] and 'core-command-discovery' not in old_probe['capabilities'])
+            if args.restricted_path:
+                failed = call(legacy_command + ['setup','--terminal',terminal],env=server,ok=False)
+                check('Previous runtime reproduces the reported missing hc error',failed.returncode != 0 and "No such file or directory: 'hc'" in failed.stderr)
+        else:
+            check('Existing remote Agent starts without any Projects runtime or ledger',not registry.exists())
         ah=Path(client['HERDR_APP_HOME']);(ah/'shared.json').write_text(json.dumps({'frame.welcomed':'skipped'}));(ah/'settings.json').write_text(json.dumps({'appearance':'dark'}))
         display_log=(scratch/'display.log').open('w')
         display=subprocess.Popen(['Xvfb','-displayfd','1','-screen','0','1600x1000x24','-nolisten','tcp'],stdout=subprocess.PIPE,stderr=display_log,text=True)
@@ -76,20 +110,24 @@ def main():
         do('layout.select',stack='panel-body',child='project');do('layout.show',id='panel');time.sleep(1)
         pointer.click(1565,965)
         call([app,'shot',str(output/'empty.png')])
-        check('Viewing an unprepared machine does not silently install anything',not registry.exists())
+        check('Viewing a machine does not silently install or upgrade its runtime',registry.read_text() == previous_registration if previous_registration else not registry.exists())
         # Native left Agent row context menu, with the same Space/Agent geometry
         # as Herdr's personal layout. The target is held by the menu, not focus.
         pointer.click(130,575,button=3);time.sleep(.3)
         call([app,'shot',str(output/'menu.png')])
         check('Left Agent right-click opens the Leader entry',bool(jcall([app,'status']).get('overlays')))
         pointer.click(220,592)
-        wait_for(lambda:registry.exists(),'automatic remote runtime preparation')
+        wait_for(lambda:registry.exists() and registry.read_text() != previous_registration,'automatic remote runtime preparation')
         time.sleep(1)
         check('Setup automatically installs only on the selected machine',registry.exists() and not Path(client['XDG_DATA_HOME'],'herdr-projects').exists())
         call([app,'shot',str(output/'form.png')])
         pointer.type_ascii('deliver fixture');pointer.key('Return');pointer.key('Return')
         wait_for(lambda:(scratch/'server/attached-ready').exists(),'existing Agent receives introduction and writes a task')
         registered=json.loads(registry.read_text());cli=registered['command']
+        if args.legacy_source:
+            new_probe = jcall(cli + ['probe'],env=server)
+            check('Automatic upgrade keeps the custom ledger and its files',new_probe['ledgerHome'] == str(custom_ledger) and (custom_ledger / 'preserved.txt').read_text() == 'existing project files')
+            check('The prepared runtime advertises Core path discovery','core-command-discovery' in new_probe['capabilities'])
         record=json.loads((scratch/'server/attached-ready').read_text());project=record['project']
         wait_for(lambda:jcall(cli+['show','--project',project],env=server)['main'].get('notice',{}).get('state') not in (None,'sending'),'send acknowledgement')
         p=jcall(cli+['show','--project',project],env=server)
@@ -112,7 +150,7 @@ def main():
         for key in ('panel','tabs','agents','setup'):call([app,'check',installed[key]])
         check('All four installed native mods pass check',True)
         (output/'result.json').write_text(json.dumps(dict(passed=len(checks),checks=checks,app=call([app,'--version']).stdout.strip(),
-            core=call(['hc','--version']).stdout.strip(),synthetic=True,transport='isolated cores with real machine --via, existing deterministic Agent, no LLM'),indent=2)+'\n')
+            core=call(['hc','--version']).stdout.strip(),synthetic=True,restrictedPath=args.restricted_path,legacyUpgrade=bool(args.legacy_source),transport='isolated cores with real machine --via, existing deterministic Agent, no LLM'),indent=2)+'\n')
     finally:
         if pointer:pointer.close()
         if window:

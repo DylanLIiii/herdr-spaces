@@ -26,6 +26,8 @@
 }
 ```
 
+桌面使用新安装名称时，`--remote-name ORIGINAL` 可让 Project 和 Agents 继续使用原远端登记，避免手动修改两个 props。Leader 设置会检查登记的能力，必要时更新旧运行程序，同时保留其账本路径。
+
 `remotes` 的 key 是本客户端 Herdr 的 machine 名称，仅用于找到连接，不是项目身份。`command` 是完整 argv；也可包含 `--home` 和自定义账本目录。`--registry-dir` 自定义安装登记目录时，使用显式 `command`；默认发现只读取目标 Core 的 XDG config 目录。
 
 安装器不会覆盖已有文件。0.1 用户可以在两端以 `--name spaces-v02` 并行安装，再选择本机的 `spaces-v02` 布局。默认数据目录仍为 `herdr-projects`，无需复制数据库。项目侧命令变为 `spaces-v02-project`。已经运行的 0.1 Main/Worker 仍使用原运行程序；待原生会话正常退出并完成核对，再由新 CLI 启动下一代 Main。
@@ -42,6 +44,7 @@
 
 - 目标机器未准备：使用 0.3 的“设为 Project Leader”入口自动准备，或手动 runtime-only 安装；确认使用的安装名称和数据目录一致。
 - 找不到 Python：检查服务器 Core 环境的 `python3`，或在远端 props 中指定绝对 `python` 路径。
+- 找不到 `hc`：0.3.1 起无需后台 PATH 含 `~/.local/bin`，运行程序会发现官方 `herdr-core` / `hc` 安装。先更新桌面插件并重新打开 Leader 设置，以升级旧远端运行程序。非标准路径可在项目机器设置 `HC_INSTALL_DIR` 或 `HERDR_PROJECTS_HC`；不要因此重启 Core 或删除项目。
 - 终端未关联项目：确认 Main 通过项目 CLI 启动，并且 CLI 和当前机器连接使用同一 Core session、同一账本目录。
 - 运行程序版本不兼容：升级项目机器的运行程序；旧版本不能靠新增一个客户端配置来获得新协议。
 - 无法读取或跳转：先检查 Herdr 的机器连接；不要因为失联而创建第二个项目副本。项目端可运行 `herdr-project probe` 查看程序版本与数据目录。

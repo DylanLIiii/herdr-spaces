@@ -42,10 +42,17 @@ test('closing while preparing cannot bind a project or type into a terminal',asy
 });
 
 test('an existing Leader is opened instead of silently reassigned',async()=>{
- const h=await host();await h.respond({capabilities:['leader-bind']});
+ const h=await host();await h.respond({capabilities:['leader-bind','core-command-discovery']});
  await h.respond({...catalog,projects:[{id:'existing',name:'Existing',goal:'Goal',cwd:'/srv/repo',main:{state:'running',terminal:'t2',scope:'core:server'}}]});
  h.view.selected='existing';h.view.save(h.cx);assert.equal(h.state.pending.length,0);
  const open=find(h.view.render(h.cx),'setup-existing');assert.ok(open);open.events.click();assert.equal(h.state.actions[0][0],'agent.focus');assert.equal(h.state.actions[0][1].terminal,'server/t2');
+});
+
+test('setup upgrades an existing 0.3.0 runtime before asking it to call Core',async()=>{
+ const h=await host();await h.respond({version:'0.3.0',capabilities:['leader-bind','guarded-introduction']});
+ assert.equal(h.state.pending[0].args[1],'bootstrap source');assert.equal(h.state.pending[0].options.on,'server');
+ await h.respond({prepared:true});assert.equal(h.state.pending[0].args.at(-3),'setup');
+ await h.respond(catalog);assert.ok(h.view.catalog);assert.equal(h.state.pending.length,0);h.view.close();
 });
 
 test('GPUI isolated mods ship identical copies of the shared transport',async()=>{

@@ -110,7 +110,7 @@ class PreparationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp, patch.dict(os.environ, {'XDG_CONFIG_HOME':temp+'/config','XDG_DATA_HOME':temp+'/data'}, clear=True):
             registry=Path(temp)/'config/herdr-spaces/runtimes';registry.mkdir(parents=True)
             ledger=Path(temp)/'custom ledger';ledger.mkdir();(ledger/'existing.txt').write_text('keep')
-            legacy=[sys.executable,'-c','import json;print(json.dumps('+repr({'protocolVersion':1,'ledgerHome':str(ledger)})+'))']
+            legacy=[sys.executable,'-c','import json;print(json.dumps('+repr({'protocolVersion':1,'version':'0.3.0','capabilities':['leader-bind','guarded-introduction'],'ledgerHome':str(ledger)})+'))']
             (registry/'projects.json').write_text(json.dumps({'protocolVersion':1,'command':legacy}))
             result=prepare('projects',runtime_bundle())
             self.assertTrue(result['prepared']);self.assertEqual(str(ledger),result['ledgerHome'])

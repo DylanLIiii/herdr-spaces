@@ -1,7 +1,7 @@
 import { View, div } from 'gpui-kit';
 import { v_flex, h_flex, InputState, Input } from 'gpui-base';
 import { props, exec, readTextFile, theme, openOverlay, closeOverlay, run } from 'herdr';
-import { callRuntime, prepareRuntime } from './transport.js';
+import { callRuntime, prepareRuntime, supportsLeaderSetup } from './transport.js';
 
 const text=(value,t)=>div().text_size(12).text_color(t.muted).child(value);
 const button=(id,label,action,t,primary=false,disabled=false)=>div().id(id).px(10).py(7).rounded(6)
@@ -29,7 +29,7 @@ export default class Setup extends View {
         let probe;
         try {probe=await this.call(['probe']);}catch(e){if(e.code!=='runtime_missing')throw e;}
         if(this.closed)return;
-        if(!probe?.capabilities?.includes('leader-bind'))await prepareRuntime(this.config,this.loc,exec,readTextFile);
+        if(!supportsLeaderSetup(probe))await prepareRuntime(this.config,this.loc,exec,readTextFile);
         if(this.closed)return;
         const data=await this.call(['setup','--terminal',this.loc.localTerminal]);
         if(this.closed)return;
