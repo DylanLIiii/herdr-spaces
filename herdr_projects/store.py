@@ -368,7 +368,12 @@ class Store:
         return dict(path=str(path), changed=changed, text=raw[:64000].decode('utf-8', errors='replace'), truncated=len(raw) > 64000)
 
 
-def identity_from_env():
+def identity_from_env(store=None):
+    if store is not None and not any(os.environ.get(k) for k in ('HERDR_PROJECT_ID', 'HERDR_PROJECT_ROLE', 'HERDR_PROJECT_TOKEN', 'HERDR_MAIN_ID', 'HERDR_SESSION_GENERATION', 'HERDR_RUN_ID')):
+        from .onboarding import attached_identity
+        attached = attached_identity(store)
+        if attached:
+            return attached
     try:
         generation = int(os.environ.get('HERDR_SESSION_GENERATION', '0'))
     except ValueError:

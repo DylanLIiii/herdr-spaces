@@ -56,10 +56,10 @@ class PrivateDisplay:
         self.x.XSync(self.display,0)
         time.sleep(.3)
 
-    def click(self, x, y):
+    def click(self, x, y, button=1):
         self.xt.XTestFakeMotionEvent(self.display,-1,x,y,0)
-        self.xt.XTestFakeButtonEvent(self.display,1,1,0)
-        self.xt.XTestFakeButtonEvent(self.display,1,0,0)
+        self.xt.XTestFakeButtonEvent(self.display,button,1,0)
+        self.xt.XTestFakeButtonEvent(self.display,button,0,0)
         self.x.XSync(self.display,0)
         time.sleep(.2)
 
@@ -69,6 +69,12 @@ class PrivateDisplay:
         self.xt.XTestFakeKeyEvent(self.display,code,0,0)
         self.x.XSync(self.display,0)
         time.sleep(.15)
+
+    def type_ascii(self, value):
+        for char in value:
+            if not (char.isascii() and (char.islower() or char.isdigit() or char == ' ')):
+                raise ValueError('Fixture text supports lowercase ASCII, digits and spaces')
+            self.key('space' if char == ' ' else char)
 
     def scroll(self, x, y, down=True, count=8):
         self.xt.XTestFakeMotionEvent(self.display,-1,x,y,0)

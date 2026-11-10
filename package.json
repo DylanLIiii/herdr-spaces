@@ -1,6 +1,6 @@
 {
   "name": "herdr-spaces",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Native Herdr project sidebar with a persistent task ledger and one Main agent per project",
   "license": "MIT",
   "repository": {
@@ -14,8 +14,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "python3 -m unittest discover -s tests -v && node --experimental-vm-modules --test tests/panel.test.js",
-    "check": "python3 -m compileall -q herdr_projects project.py scripts && node --check mods/project/main.js && node --check mods/project/model.js && node --check mods/project/transport.js && node --check mods/projects-tabs/main.js",
+    "test": "python3 -m unittest discover -s tests -v && node --experimental-vm-modules --test tests/*.test.js",
+    "check": "python3 -m compileall -q herdr_projects project.py scripts && node --check mods/project/main.js && node --check mods/project/model.js && node --check mods/project/transport.js && node --check mods/projects-tabs/main.js && node --check mods/projects-agents/main.js && node --check mods/project-setup/main.js",
     "install-layout": "python3 scripts/install.py"
   }
 }

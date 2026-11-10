@@ -1,0 +1,22 @@
+{
+  "passed": 13,
+  "checks": [
+    "Existing remote Agent starts without any Projects runtime or ledger",
+    "Viewing an unprepared machine does not silently install anything",
+    "Left Agent right-click opens the Leader entry",
+    "Setup automatically installs only on the selected machine",
+    "Binding reuses the original terminal and stable Main identity",
+    "Existing Agent reads context and writes through terminal-bound identity",
+    "Only one visible introduction is recorded",
+    "The left Agent has a persistent Leader label",
+    "No replacement Agent was launched",
+    "Native setup closes without host errors or a docked settings copy",
+    "Setup is only a dialog and never inserts itself into the workspace",
+    "Leader setup fits a narrow window and closes by keyboard",
+    "All four installed native mods pass check"
+  ],
+  "app": "herdr-app 0.1.14",
+  "core": "hc 0.1.19",
+  "synthetic": true,
+  "transport": "isolated cores with real machine --via, existing deterministic Agent, no LLM"
+}

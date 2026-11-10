@@ -33,6 +33,11 @@ class InstallTests(unittest.TestCase):
         layout = json.loads(Path(installed['layout']).read_text())
         self.assertIn('projects-tabs', json.dumps(layout))
         self.assertNotIn('globalThis', Path(installed['panel'], 'main.js').read_text())
+        for key in ('panel', 'tabs', 'agents', 'setup'):
+            self.assertEqual('none', json.loads(Path(installed[key], 'mod.json').read_text())['place'])
+        config = Path(installed['setup'], 'main.js').read_text()
+        self.assertIn("from './transport.js'", config)
+        self.assertEqual(Path(installed['panel'], 'transport.js').read_text(), Path(installed['setup'], 'transport.js').read_text())
 
     def test_refuses_overwrite_without_partial_install(self):
         installed = self.install()

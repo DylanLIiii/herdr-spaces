@@ -1,8 +1,8 @@
 import { View, div, svg } from 'gpui-kit';
 import { h_flex, v_flex, TextView } from 'gpui-base';
-import { props, exec, spaces, panes, focused, terminals, theme, run, layout, nextCommand } from 'herdr';
+import { props, exec, spaces, panes, focused, terminals, theme, run, layout, nextCommand, openOverlay } from 'herdr';
 import { groups, labels, findNode, location, sessionStatus, terminalAddress } from './model.js';
-import { endpoint, validateSnapshot } from './transport.js';
+import { callRuntime, validateSnapshot } from './transport.js';
 
 const caption = (s,t) => div().text_size(11).text_color(t.muted).child(s);
 const paragraph = (s,t) => div().text_size(12).text_color(t.foreground).child(s);
@@ -34,13 +34,10 @@ export default class Project extends View {
   visible(){const root=layout(),panel=findNode(root,'panel'),body=findNode(root,'panel-body');return !panel||(!panel.hidden&&body?.active==='project');}
   currentLocation(){return location(focused(),panes(),spaces());}
   currentKey(){return JSON.stringify(this.currentLocation());}
-  async call(args,loc) {
-    const target=endpoint(this.config,loc.machine);
-    try {
-      const r=await exec(target.command,[...target.args,...args],{on:target.on,timeout:10000});
-      if(r.code!==0)throw new Error((r.stderr||r.stdout||'无法读取账本').slice(0,1500));
-      return JSON.parse(r.stdout);
-    } catch(e) {throw new Error((loc.machine?loc.machine:'本机')+'：'+String(e));}
+  call(args,loc) {return callRuntime(this.config,args,loc,exec);}
+  setup(terminal=this.currentLocation().terminal) {
+    if(terminal)openOverlay({mod:this.config.setupMod||'project-setup',kind:'dialog',width:460,height:560,
+      props:{...this.config,terminal}});
   }
   address(record){return this.origin?terminalAddress(record,this.origin.machine,this.origin.coreScopes):null;}
   live(record){const address=this.address(record);return address?terminals().find(t=>t.address===address):null;}
@@ -58,7 +55,7 @@ export default class Project extends View {
         const changed=this.origin&&(this.origin.coreScopes[0]!==snapshot.coreScopes[0]||this.origin.ledgerHome!==snapshot.ledgerHome||this.project?.id!==snapshot.project?.id);
         if(changed){this.epoch++;this.detail=null;this.file=null;this.preview=null;this.busy=false;}
         this.project=snapshot.project;this.origin={...loc,coreScopes:snapshot.coreScopes,ledgerHome:snapshot.ledgerHome};this.error=null;cx.notify();
-      } catch(e) {if(!this.closed&&epoch===this.epoch&&key===this.currentKey()&&ticket===this.ticket)this.error=String(e);}
+      } catch(e) {if(!this.closed&&epoch===this.epoch&&key===this.currentKey()&&ticket===this.ticket)this.error=e;}
       finally {if(!this.closed&&epoch===this.epoch&&ticket===this.ticket){this.busy=false;cx.notify();}}
     });
   }
@@ -180,10 +177,20 @@ export default class Project extends View {
         .when(Boolean(this.detail||this.file),el=>el.child(button('project-back','←',(_e,cx)=>{this.detail=null;this.file=null;cx.notify();},t)))
         .child(div().flex_1().font_semibold().child('Project'))
         .child(button('project-refresh','↻',(_e,cx)=>this.refresh(cx),t)).child(row));
-    if(this.error)root.child(div().flex_none().p(12).text_color(t.blocked).child((p?'刷新失败，以下是上次记录。\n':'')+this.error));
-    if(!p)return root.child(v_flex().p(14).gap(12).child(paragraph(this.busy?'读取项目记录…':this.error?'项目记录暂不可用。':'此终端尚未关联项目。',t))
-      .child(caption('在'+(loc.machine||'本机')+'的原生终端创建项目并启动其 Main：',t)).child(paragraph('herdr-project create my-project --name "项目名" --goal "项目目标" --cwd /path/to/repo',t))
-      .child(paragraph('herdr-project start --project my-project --backend pi',t)));
+    const missing=this.error?.code==='runtime_missing';
+    if(this.error&&!missing)root.child(v_flex().flex_none().p(12).gap(6)
+      .child(paragraph(p?'连接暂不可用，以下是上次记录。':'暂时无法读取项目记录。',t))
+      .child(button('project-error-detail',this.showError?'收起详情':'查看详情',(_e,cx)=>{this.showError=!this.showError;cx.notify();},t))
+      .when(Boolean(this.showError),el=>el.child(caption(this.error?.detail||this.error?.message||String(this.error),t))));
+    if(!p)return root.child(v_flex().p(16).gap(12)
+      .child(div().font_semibold().child(this.busy?'正在读取项目…':loc.terminal?'让这个终端负责一个项目':'先选择一个 Agent 终端'))
+      .child(paragraph(loc.terminal?'把当前 Agent 设为 Project Leader，任务与资料会留在 '+(loc.machine||'本机')+'。':'在左侧选择 Agent，或进入一个原生终端。',t))
+      .when(Boolean(loc.terminal&&!this.busy),el=>el.child(button('project-setup','设为 Project Leader…',()=>this.setup(),t,true)))
+      .when(Boolean(missing),el=>el.child(caption('设置时会自动准备这台机器所需的项目功能。',t)))
+      .child(caption('也可以右键左侧 Agent，选择“设为 Project Leader”。',t)));
+    if(p.main.mode==='attached'&&p.main.notice?.state!=='sent')root.child(v_flex().px(14).py(10).gap(5)
+      .child(caption('Leader 已绑定，尚未确认收到项目说明。',t))
+      .child(button('project-introduce','交代项目…',()=>this.setup(this.address(p.main)),t)));
     const summary=groups(p.items).filter(g=>g.id!=='cancelled').map(g=>g.items.length+' '+g.title).join(' · ');
     root.child(v_flex().flex_none().px(14).py(12).gap(7).child(div().font_semibold().text_size(13).child(p.name))
       .child(div().text_size(12).text_color(t.muted).child(p.goal.length>160?p.goal.slice(0,160)+'…':p.goal))

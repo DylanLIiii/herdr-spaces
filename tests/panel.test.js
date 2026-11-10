@@ -36,7 +36,7 @@ async function host(options={}){
     'gpui-base':{h_flex:element,v_flex:element,TextView:{markdown:(_id,text)=>element().child(text)}},
     herdr:{props:()=>({entry:'/app/project.py',dataHome:'/local/ledger',...options.config}),exec:(command,args,opts)=>new Promise((resolve,reject)=>state.pending.push({command,args,options:opts,resolve,reject})),
       spaces:()=>[state.space],panes:()=>state.live.map(t=>({terminal:t.address})),focused:()=>state.focus,terminals:()=>state.live,
-      theme:()=>({}),layout:()=>null,nextCommand:()=>new Promise(()=>{}),run:(name,args)=>state.calls.push({name,args})},
+      theme:()=>({}),layout:()=>null,nextCommand:()=>new Promise(()=>{}),run:(name,args)=>state.calls.push({name,args}),openOverlay:spec=>state.calls.push({name:'overlay',args:spec})},
   };
   const modules=new Map();
   const load=async path=>{
@@ -133,7 +133,7 @@ test('remote disconnect keeps marked stale data and never falls back to a local 
 
 test('incompatible runtime fails explicitly and a changed core clears old evidence',async()=>{
   const h=await host({focus:{terminal:'server/t1'}});await h.respond(fixture('a'),0,{protocolVersion:99});
-  assert.equal(h.view.project,null);assert.match(h.view.error,/版本不兼容/);
+  assert.equal(h.view.project,null);assert.match(h.view.error.message,/版本不兼容/);
   h.view.refresh(h.cx);await h.respond(fixture('a'));h.view.openFile('pm',h.cx);
   h.view.refresh(h.cx);await h.respond(fixture('b'),1,{coreScopes:['core:replacement']});
   await h.respond(null,0,{coreScope:'core:server',text:'stale evidence'});
@@ -144,6 +144,13 @@ test('custom remote command stays an argv array with spaces intact',async()=>{
   const h=await host({focus:{terminal:'server/t1'},config:{remotes:{server:{command:['/opt/my runtime/herdr-project','--home','/srv/project data']}}}});
   const req=h.state.pending[0];assert.equal(req.command,'/opt/my runtime/herdr-project');
   assert.deepEqual([...req.args],['--home','/srv/project data','snapshot','--terminal','t1']);assert.equal(req.options.on,'server');h.view.close();
+});
+
+test('missing runtime offers Leader setup instead of raw installation commands',async()=>{
+  const h=await host({focus:{terminal:'gpu-dev/t1'}});
+  h.state.pending.shift().resolve({code:2,stderr:JSON.stringify({code:'runtime_missing',message:'runtime absent'})});await turn();
+  const root=h.view.render(h.cx);assert.ok(find(root,'project-setup'));
+  assert.doesNotMatch(allText(root),/scripts\/install.py|herdr-project create|Error:/);h.view.close();
 });
 
 test('closing during a read prevents updates and renders no new composer',async()=>{

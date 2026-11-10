@@ -6,7 +6,7 @@ import sqlite3
 import sys
 
 from .store import ProjectError, Store, default_home, identity_from_env
-from . import __version__, runtime
+from . import __version__, runtime, onboarding
 
 PROTOCOL_VERSION = 1
 
@@ -47,6 +47,17 @@ def parser():
     commands.add_parser('operations', help='Describe JSON write operations')
     snap = commands.add_parser('snapshot', help='Read panel data bound to an exact terminal/core')
     snap.add_argument('--terminal')
+    setup = commands.add_parser('setup', help='Inspect an existing terminal and projects on this machine')
+    setup.add_argument('--terminal', required=True)
+    bind = commands.add_parser('bind', help='Assign an existing terminal as the unique project Leader')
+    for field in ('terminal', 'core-scope', 'project'):
+        bind.add_argument('--' + field, required=True)
+    for field in ('name', 'goal', 'cwd'):
+        bind.add_argument('--' + field)
+    notify = commands.add_parser('introduce', help='Send one project introduction to an idle Agent, never force input')
+    for field in ('project', 'core-scope'):
+        notify.add_argument('--' + field, required=True)
+    notify.add_argument('--generation', required=True, type=int)
     for name in ('show', 'context', 'history', 'apply', 'report', 'start', 'worker', 'reconcile', '_run', 'read'):
         sub = commands.add_parser(name)
         sub.add_argument('--project', default=os.environ.get('HERDR_PROJECT_ID'), required=not bool(os.environ.get('HERDR_PROJECT_ID')))
@@ -78,7 +89,7 @@ def main(argv=None):
     try:
         if args.action == 'probe':
             result = dict(protocolVersion=PROTOCOL_VERSION, schemaVersion=1, version=__version__,
-                          ledgerHome=str(Path(args.home or default_home()).expanduser().resolve()))
+                          ledgerHome=str(Path(args.home or default_home()).expanduser().resolve()), capabilities=['leader-bind', 'guarded-introduction'])
         elif args.action == 'operations':
             result = dict(operations=OPERATIONS, note='All apply requests require op, requestId and the current project revision. Call from the managed Main terminal. Replaying the same requestId/content is idempotent.')
         else:
@@ -97,6 +108,12 @@ def main(argv=None):
             elif action == 'snapshot':
                 result = store.snapshot(args.terminal, scopes=scopes)
                 result.update(protocolVersion=PROTOCOL_VERSION, coreScopes=scopes or [], ledgerHome=ledger_home)
+            elif action == 'setup':
+                result = onboarding.setup(store, args.terminal)
+            elif action == 'bind':
+                result = onboarding.bind(store, args.terminal, args.core_scope, args.project, args.name, args.goal, args.cwd)
+            elif action == 'introduce':
+                result = onboarding.notify(store, args.project, args.core_scope, args.generation)
             elif action == 'show':
                 result = store.public(store.get(args.project))
             elif action == 'context':
@@ -105,16 +122,16 @@ def main(argv=None):
             elif action == 'history':
                 result = store.history(args.project)
             elif action == 'apply':
-                result = store.apply(args.project, args.revision, read_json(args.file), identity_from_env())
+                result = store.apply(args.project, args.revision, read_json(args.file), identity_from_env(store))
             elif action == 'report':
                 request = read_json(args.file)
                 if not isinstance(request, dict):
                     raise ProjectError('Report must be an object')
-                result = store.report(args.project, request, identity_from_env())
+                result = store.report(args.project, request, identity_from_env(store))
             elif action in ('start', 'worker'):
                 argv = runtime.command(json.loads(args.command_json) if args.command_json else None, args.backend)
                 result = runtime.start(store, args.project, argv, args.space, args.tab,
-                                       getattr(args, 'item', None), getattr(args, 'revision', None), identity_from_env())
+                                       getattr(args, 'item', None), getattr(args, 'revision', None), identity_from_env(store))
             elif action == 'reconcile':
                 result = runtime.reconcile(store, args.project, args.run)
             elif action == '_run':

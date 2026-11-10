@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0
+
+- Right-click an existing Agent to designate it as Project Leader, then choose or create a project in a native form. The original terminal and session stay in place.
+- Prepare a missing project-machine runtime from the desktop's bundled code during setup. First-use empty states offer an action instead of raw installation errors and shell commands.
+- Show a Leader label in the personal Agents list; open the existing Leader when a project already has one.
+- Send one visible project introduction only to an idle Agent using Core's guarded send. Busy/blocked/shell terminals receive no input; uncertain delivery is never retried automatically.
+- Resolve attached Leader CLI credentials from its explicit Core/terminal binding, while retaining token validation for managed executions.
+
 ## 0.2.0
 
 - Project records, evidence, Main and Workers stay on the project's machine. The desktop panel reads them through Herdr's existing machine connection.

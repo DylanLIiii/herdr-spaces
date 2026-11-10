@@ -77,9 +77,11 @@ def context(store, project_id, run_id=None):
     p = store.public(store.get(project_id))
     cmd = cli_prefix(store)
     role = 'Worker' if run_id else 'Main / SuperAgent'
+    identity_note = ('当前原生终端已由用户指定为 Leader；CLI 使用目标 Core 与 HC_TERMINAL_ID 解析绑定身份。'
+                     if not run_id and p['main'].get('mode') == 'attached' else '身份由启动器的环境变量传递。')
     rules = f'''你是项目 {p['name']} ({p['id']}) 的 {role}。使用现有终端界面。
 项目只有一个稳定 Main 身份：{p['main']['id']}。当前代次 {p['main']['generation']}。
-身份由启动器的环境变量传递；不要复制给其他终端或伪造身份。
+{identity_note}不要复制给其他终端或伪造身份。
 项目记录是跨会话事实。开始工作及恢复/压缩后，先运行：
   {cmd} context --project {shlex.quote(p['id'])}
 查看最新结构化数据：
@@ -161,8 +163,8 @@ def start(store, project_id, argv, space=None, tab=None, item_id=None, revision=
                 record = p['main']
                 if record['state'] not in ('inactive', 'exited'):
                     return dict(started=False, main=store.public(p)['main'], hint='An owner is already registered. Navigate to its terminal; use reconcile after an interrupted launch or exit.')
-                record.update(generation=record['generation'] + 1, token=uid('token'), state='starting',
-                              terminal=None, scope=scope, command=argv, startedAt=now())
+                record.update(generation=record['generation'] + 1, token=uid('token'), state='starting', mode='managed',
+                              terminal=None, scope=scope, command=argv, startedAt=now(), notice=None)
             # Unique labels make a lost launcher response discoverable.
             space = space or 'hp-' + project_id
             tab = tab or ('hp-' + record['id'])
@@ -261,8 +263,14 @@ def reconcile(store, project_id, run_id=None):
         with lock(store, project_id + ('-' + run_id if run_id else '-main') + '-process'):
             # A live kept shell is still live. Do not infer the old agent is gone
             # from idle/done, lease age, or screen text.
-            result = hc(['ls', '--json', '--label', 'projects.launch=' + record['token']])
-            live = result.get('terminals')
+            if record.get('mode') == 'attached':
+                result = hc(['get', record['terminal'], '--json'])
+                if result.get('address') != record['terminal']:
+                    raise ProjectError('Core did not confirm the attached terminal identity')
+                live = [result]
+            else:
+                result = hc(['ls', '--json', '--label', 'projects.launch=' + record['token']])
+                live = result.get('terminals')
             if not isinstance(live, list):
                 raise ProjectError('Core did not return an authoritative terminal list')
             if any(t.get('state') == 'live' for t in live):
