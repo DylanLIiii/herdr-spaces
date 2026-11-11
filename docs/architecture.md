@@ -4,7 +4,7 @@
 
 Projects 是一个独立插件工程：Python CLI 保存 SQLite 账本并通过现有 hc CLI 启动程序；原生 GPUI mod 调用只读命令显示记录。Herdr app/core 源码、共享 API、内置布局都未修改。
 
-默认数据目录为 `${XDG_DATA_HOME:-~/.local/share}/herdr-projects`。可用 `HERDR_PROJECTS_HOME` 或 `--home` 指定。表结构版本保存在 SQLite `user_version`，当前为 1；更高版本不会被旧程序静默打开。SQLite 使用 WAL、写事务和唯一约束。备份时使用 SQLite backup API；不要仅复制运行中的主库文件而遗漏 WAL。
+默认数据目录为 `${XDG_DATA_HOME:-~/.local/share}/herdr-projects`。可用 `HERDR_PROJECTS_HOME` 或 `--home` 指定。表结构版本保存在 SQLite `user_version`，当前为 2；事务迁移保留旧项目、身份、修订与证据。更高版本不会被旧程序静默打开。SQLite 使用 WAL、写事务和唯一约束。备份时使用 SQLite backup API；不要仅复制运行中的主库文件而遗漏 WAL。
 
 ## 项目与执行
 
@@ -12,9 +12,9 @@ Projects 是一个独立插件工程：Python CLI 保存 SQLite 账本并通过�
 
 0.3 还支持 `bind` 将已有原生终端指定为 Leader，保持该终端和会话。Attached 模式通过 Core id / terminal 绑定解析 CLI 身份；Managed 模式继续使用代次 token。绑定和介绍状态分别记录，不能把绑定视为 Agent 已收到规则。显式重新绑定校验 generation，并在同一事务中删除旧 binding、提升 generation、轮换 token、更新终端和保存配置。Main id、项目历史与 Worker 身份保持；旧进程退出使用 token 比较，不会覆盖接任 PM。绑定与介绍共用项目介绍锁，避免向已交接的终端发送新规则。
 
-项目可保存 `pmSkill` 和 `subAgent {backend, model}`。旧项目读取时回退到内置 Skill 与 Pi 默认模型。`skill` 全文读取入口及其目录内资源，不沿用产物预览截断；引用路径不能逃逸 Skill 目录。Worker 在生成 argv 时使用保存的工具和模型，显式 backend 切换不携带其他工具的模型。安装包与能力探测包含这些功能，旧远端运行程序在设置时升级。详见 [PM 设置](onboarding.md)。
+项目保存 PM 引导配置状态 `setup`、版本化角色团队 `configuration`，以及兼容的 `pmSkill` 和 `subAgent {backend, model}`。由指定 PM 通过独立 `skill --setup` 入口询问是否开始、维护草案和验证结果；绑定不等于配置完成。完整流程见 [协调指南](coordination-guide.md)。旧项目读取时回退到内置 Skill 与 Pi 默认模型。`skill` 全文读取入口及其目录内资源，不沿用产物预览截断；引用路径不能逃逸 Skill 目录。Worker 在生成 argv 时使用保存的工具和模型，显式 backend 切换不携带其他工具的模型。安装包与能力探测包含这些功能，旧远端运行程序在设置时升级。详见 [PM 设置](onboarding.md)。
 
-`start` 在事务内预留 owner，再调用 `hc run --bg --keep --no-parent --no-notify`。独立 Python wrapper 将项目环境和启动上下文传给现有 Agent 程序，继承原生 PTY，不代理其输入输出。运行没有后台协调 daemon；窗口关闭后 core 继续承载程序，SQLite 保留记录。包装程序保留原生进程的 Ctrl+C 处理，避免 Python 的 KeyboardInterrupt 意外终止 Agent。
+`start` 在事务内预留 owner，再调用 `hc run --bg --keep --no-parent --no-notify`。独立 Python wrapper 将项目环境和启动上下文传给现有 Agent 程序，继承原生 PTY，不代理其输入输出。窗口关闭后 core 继续承载程序，SQLite 保留记录。可选的确定性跟进服务运行在项目机器，负责持久通知与检查点，不拥有业务验收权限；服务启停与执行独立。包装程序保留原生进程的 Ctrl+C 处理，避免 Python 的 KeyboardInterrupt 意外终止 Agent。
 
 启动上下文使用有上限的当前摘要，完整记录通过 show/history 读取；历史增长不会被全部塞进一个命令行参数。数据库本身不按摘要上限裁剪。
 
@@ -40,7 +40,7 @@ ready 或取消之前，旧执行必须已退出并核对。重新派发使用�
 
 Worker 的 report 校验 project、run、token 和 activeRunId。旧 Run 的晚到新回报会被拒绝；已成功提交的同一报告可以重试。报告中的多个产物作为整体提交，任意一个无效则全部回滚。
 
-产物登记保留绝对路径、版本、SHA-256、workItemId、runId（如果来自 Worker）、sourceRef 和审阅状态。接受任务必须引用本任务已采纳的证据，且文件此刻仍与登记哈希一致。预览随后发生变化的文件会明确显示已变更。这里验证引用和内容完整性；不能自动证明报告语义或测试结论真实。验收也不构成合并、部署授权。
+产物登记保留绝对路径、版本、SHA-256、workItemId、runId（如果来自 Worker）、sourceRef 和审阅状态。接受任务必须引用本任务已核验的证据，且文件此刻仍与登记哈希一致。受管产物包另外核验 manifest 列出的全部文件；报告核验、项目采用和内容有效性分别保存。预览随后发生变化的文件会明确显示已变更。这里验证引用和内容完整性；不能自动证明报告语义或测试结论真实。验收也不构成合并、部署授权。
 
 pm.md 保存叙述性目标、决策和关键路径。创建时可显式关联现有 coding-hub pm.md，程序不覆盖它。结构化决策也可存在账本的 decisions 列表，侧栏展示；不会尝试自动双向同步任意 Markdown。
 
@@ -50,7 +50,7 @@ pm.md 保存叙述性目标、决策和关键路径。创建时可显式关联�
 
 启动 CLI 遇到超时/响应异常时不删除预留，也不盲目重发。恢复先检查原 core scope、进程锁，再检查携带该 launch label 的存活终端。core 不可用时拒绝恢复。旧终端仍存活（包括 core `--keep` 恢复出的 shell）时也拒绝：先由用户查看原生终端并明确结束，再 reconcile。
 
-这些机制保护通过此接口发起的执行和写入。拥有 shell 的 agent 可以绕过 CLI，任意访问本用户文件或启动别的进程；环境 token、SQLite 和文件锁不是 OS 安全隔离。当前没有跨机器分布式租约、自动故障切换或长期调度 daemon。Worker 使用项目 cwd；没有自动 worktree 创建和跨执行写入范围隔离。Main 需要按任务范围协调现有工作目录，不能把终端独立误认为文件系统隔离。
+这些机制保护通过此接口发起的执行和写入。拥有 shell 的 agent 可以绕过 CLI，任意访问本用户文件或启动别的进程；环境 token、SQLite 和文件锁不是 OS 安全隔离。当前没有跨机器分布式租约或自动故障切换。新角色配置的 Worker 默认独立 worktree；旧配置保留项目 cwd，但跨项目也拒绝同目录多个 live/uncertain 写手。Research 使用独立持久输出目录；只读角色依靠任务契约，不能把它当作 OS 沙箱。Run 保存配置、Skill 哈希、输入产物和工作目录快照。
 
 ## 面板与异步
 
@@ -60,7 +60,7 @@ Project 面板和 Files / Changes 共用现有右侧槽位。独立的 projects-
 
 远端请求使用 Herdr 已有的 `exec(..., {on: machine})` 通道。安装器在项目机器登记其自己的运行 argv；本机路径不跨机器使用。项目账本、文件与执行都在项目机器，客户端只有当前读取结果。scope 与 terminal 保留目标 Core 的本地形式，只有界面导航添加当前机器别名前缀。snapshot/read 带协议版本与来源标识，资料读取拒绝改变后的 Core/账本。详细配置见 [远程说明](remote.md)。
 
-账本浏览仍只读，操作包括展开、预览、刷新及终端导航。首次使用可打开原生 Leader 设置表单，选择/创建项目并绑定已有终端；用户的绑定动作会自动准备目标机运行程序，并用 `send --if idle` 交代一次项目规则。不提供聊天输入框或自动派发按钮。支持面板内 1/2/3 切换标签、上下选择、Enter 打开和 Esc 返回；不宣称完整屏幕阅读器支持。
+账本浏览仍只读，操作包括展开、搜索、成果成员/版本阅读、刷新及终端导航。较宽的原生成果阅读窗口固定项目来源。首次使用通过轻量表单选择/创建项目并绑定已有终端；用户的绑定动作会自动准备目标机运行程序，并用 `send --if idle` 交代项目规则与配置 Skill 入口。由指定 PM 询问是否开始配置，状态与结果同步展示。不提供聊天输入框或自动派发按钮。支持面板内 1/2/3 切换标签、上下选择、Enter 打开和 Esc 返回；不宣称完整屏幕阅读器支持。
 
 ## 后端适配
 

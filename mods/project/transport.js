@@ -45,7 +45,7 @@ export async function callRuntime(config,args,loc,exec) {
 }
 
 export function supportsLeaderSetup(probe) {
-  return ['leader-bind','core-command-discovery','pm-configuration'].every(feature=>probe?.capabilities?.includes(feature));
+  return ['leader-bind','core-command-discovery','pm-configuration','guided-setup','artifact-bundles'].every(feature=>probe?.capabilities?.includes(feature));
 }
 
 export async function prepareRuntime(config,loc,exec,readTextFile) {
@@ -61,8 +61,8 @@ export async function prepareRuntime(config,loc,exec,readTextFile) {
 }
 
 export function validateSnapshot(data) {
-  if(data?.protocolVersion!==1||data.schemaVersion!==1||!Array.isArray(data.coreScopes)||
+  if(data?.protocolVersion!==1||![1,2].includes(data.schemaVersion)||!Array.isArray(data.coreScopes)||
     typeof data.coreScopes[0]!=='string'||!data.coreScopes[0].startsWith('core:')||typeof data.ledgerHome!=='string')
-    throw new Error('项目运行程序版本不兼容，请在项目所在机器安装 herdr-spaces 0.2 或兼容版本。');
+    throw new Error('项目运行程序版本不兼容，请更新本机与项目机器上的 Herdr Spaces。');
   return data;
 }

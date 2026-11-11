@@ -9,6 +9,8 @@ import re
 import sqlite3
 import uuid
 
+from .schema import SCHEMA_VERSION, migrate, project_defaults
+
 
 class ProjectError(Exception):
     pass
@@ -65,20 +67,11 @@ class Store:
         self.db.row_factory = sqlite3.Row
         self.db.execute('PRAGMA foreign_keys=ON')
         self.db.execute('PRAGMA journal_mode=WAL')
-        version = self.db.execute('PRAGMA user_version').fetchone()[0]
-        if version not in (0, 1):
-            raise ProjectError(f'Unsupported ledger schema {version}; do not downgrade this installation')
-        self.db.executescript('''
-          CREATE TABLE IF NOT EXISTS projects(id TEXT PRIMARY KEY, body TEXT NOT NULL);
-          CREATE TABLE IF NOT EXISTS events(seq INTEGER PRIMARY KEY, project_id TEXT NOT NULL,
-            request_id TEXT NOT NULL, digest TEXT NOT NULL, actor TEXT NOT NULL,
-            revision INTEGER NOT NULL, at TEXT NOT NULL, payload TEXT NOT NULL,
-            UNIQUE(project_id, request_id));
-          CREATE TABLE IF NOT EXISTS bindings(scope TEXT NOT NULL, terminal TEXT NOT NULL,
-            project_id TEXT NOT NULL, role TEXT NOT NULL, run_id TEXT,
-            PRIMARY KEY(scope, terminal));
-          PRAGMA user_version=1;
-        ''')
+        try:
+            migrate(self.db)
+        except BaseException:
+            self.db.close()
+            raise
 
     def close(self):
         self.db.close()
@@ -113,6 +106,7 @@ class Store:
                        pmPath=pm, revision=0, createdAt=now(), updatedAt=now(),
                        main=dict(id=uid('main'), generation=0, state='inactive', terminal=None, scope=None),
                        items=[], runs=[], artifacts=[], decisions=[])
+        project_defaults(project)
         with self.transaction():
             try:
                 self.db.execute('INSERT INTO projects VALUES(?, ?)', (project_id, json.dumps(project, ensure_ascii=False)))
@@ -145,7 +139,14 @@ class Store:
             raise ProjectError('Ambiguous legacy terminal binding; inspect the original core/ledger before continuing')
         binding = bindings[0] if bindings else None
         project = next((p for p in projects if binding and p['id'] == binding['project_id']), None)
-        return dict(schemaVersion=1, project=project, binding=dict(binding) if binding else None,
+        if project:
+            from .coordination import inbox, service_status
+            project['inbox'] = inbox(self, project['id'])
+            if project.get('configuration', {}).get('followup', {}).get('enabled'):
+                service = service_status(self)
+                project['coordination'] = dict(live=service.get('live', False), lastCheckAt=service.get('lastCheckAt'),
+                                               status=service.get('projects', {}).get(project['id'], {}))
+        return dict(schemaVersion=SCHEMA_VERSION, project=project, binding=dict(binding) if binding else None,
                     projects=[{k: p[k] for k in ('id', 'name', 'cwd')} for p in projects])
 
     def bind(self, project_id, terminal, scope, role, run_id=None):
@@ -196,6 +197,14 @@ class Store:
 
     def operation(self, p, r):
         op = r.get('op')
+        if isinstance(op, str) and op.startswith('setup.'):
+            from .setup_flow import operation
+            operation(p, r)
+            return
+        if op in ('inbox.acknowledge', 'inbox.handle', 'inbox.retry'):
+            from .coordination import inbox_operation
+            inbox_operation(self, p, r)
+            return
         if op == 'todo.add':
             for optional in ('brief', 'nextAction'):
                 if optional in r and (not isinstance(r[optional], str) or len(r[optional]) > 10000):
@@ -207,7 +216,9 @@ class Store:
                                   status='open', sourceRef=text(r.get('sourceRef'), 'sourceRef'), brief=r.get('brief', ''),
                                   nextAction=r.get('nextAction', ''), revision=1, createdAt=now(), updatedAt=now(),
                                   createdBy=p['main']['id'], updatedBy=p['main']['id'], acceptanceCriteria=[],
-                                  checklist=[], dependencyIds=[], artifactIds=[], activeRunId=None))
+                                  checklist=[], dependencyIds=[], artifactIds=[], activeRunId=None,
+                                  phase='', waitingOn=None, question=None, checkpointAt=None,
+                                  lastProgressAt=None, inputArtifactRefs=[]))
             return
         if op == 'artifact.add':
             self.add_artifact(p, r)
@@ -216,18 +227,58 @@ class Store:
             a = next((a for a in p['artifacts'] if a['id'] == r.get('id')), None)
             if not a or r.get('status') not in ('accepted', 'rejected', 'review'):
                 raise ProjectError('Unknown artifact or invalid review status')
-            if r['status'] == 'accepted' and file_hash(a['path']) != a['sha256']:
-                raise ProjectError('Artifact changed since registration; register a new version before accepting')
-            a.update(status=r['status'], reviewNote=text(r.get('note'), 'review note'), reviewedBy=p['main']['id'])
+            if r['status'] == 'accepted':
+                from .artifacts import verify
+                verify(a)
+            a.update(status=r['status'], reviewNote=text(r.get('note'), 'review note'), reviewedBy=p['main']['id'], reviewedAt=now())
+            return
+        if op in ('artifact.disposition', 'artifact.validity', 'artifact.followup'):
+            a = next((a for a in p['artifacts'] if a['id'] == r.get('id')), None)
+            if not a:
+                raise ProjectError('Unknown artifact')
+            if op == 'artifact.disposition':
+                value = r.get('disposition')
+                if value not in ('adopted', 'deferred', 'declined'):
+                    raise ProjectError('Invalid disposition')
+                if value == 'adopted':
+                    if a['status'] != 'accepted' or a.get('validity', 'current') != 'current':
+                        raise ProjectError('Adoption requires a reviewed, current artifact')
+                    from .artifacts import verify
+                    verify(a)
+                note = text(r.get('note'), 'decision reason')
+                decision = dict(id=uid('decision'), text=note, sourceRef=a['id'], artifactRefs=[a['id']],
+                                disposition=value, at=now())
+                p['decisions'].append(decision)
+                a.update(disposition=value, dispositionNote=note, decisionId=decision['id'])
+            elif op == 'artifact.validity':
+                if r.get('validity') not in ('current', 'stale', 'superseded'):
+                    raise ProjectError('Invalid validity')
+                replacement = r.get('supersededBy')
+                if replacement and (replacement == a['id'] or replacement not in {x['id'] for x in p['artifacts']}):
+                    raise ProjectError('Unknown replacement artifact version')
+                a.update(validity=r['validity'], validityNote=text(r.get('note'), 'validity reason'), supersededBy=replacement)
+            else:
+                existing = next((i for i in p['items'] if a['id'] in i.get('inputArtifactRefs', []) and i.get('sourceRef') == 'artifact:' + a['id']), None)
+                if not existing:
+                    followup_id = identifier(r.get('workItemId', uid('work')))
+                    self.operation(p, dict(op='todo.add', id=followup_id, title=r.get('title'), sourceRef='artifact:' + a['id'],
+                                           brief=r.get('brief', ''), nextAction='由 PM 细化验证范围与完成标准'))
+                    self.item(p, followup_id)['inputArtifactRefs'] = [a['id']]
             return
         if op == 'decision.add':
-            p['decisions'].append(dict(id=uid('decision'), text=text(r.get('text'), 'decision'), sourceRef=text(r.get('sourceRef'), 'sourceRef'), at=now()))
+            refs = strings(r.get('artifactRefs', []), 'artifactRefs')
+            if any(ref not in {a['id'] for a in p['artifacts']} for ref in refs):
+                raise ProjectError('Unknown decision artifact reference')
+            p['decisions'].append(dict(id=uid('decision'), text=text(r.get('text'), 'decision'), sourceRef=text(r.get('sourceRef'), 'sourceRef'), artifactRefs=refs, at=now()))
             return
         if op == 'project.update':
             if 'goal' in r:
                 p['goal'] = text(r['goal'], 'goal')
             if 'name' in r:
                 p['name'] = text(r['name'], 'name', 200)
+            for key in ('stage', 'summary'):
+                if key in r:
+                    p[key] = text(r[key], key, 2000)
             return
         i = self.item(p, r.get('id'))
         if op == 'todo.promote':
@@ -236,6 +287,19 @@ class Store:
             i.update(kind='task', status='ready', brief=text(r.get('brief'), 'scope'),
                      acceptanceCriteria=strings(r.get('acceptanceCriteria'), 'acceptanceCriteria', True))
         elif op == 'item.update':
+            from .coordination import progress_fields
+            i.update(progress_fields(r))
+            if 'researchContract' in r:
+                if not isinstance(r['researchContract'], dict):
+                    raise ProjectError('researchContract must be an object')
+                i['researchContract'] = r['researchContract']
+                from .workspaces import research_contract
+                research_contract(i, dict(role='research', workflow='autoresearch'))
+            if 'inputArtifactRefs' in r:
+                refs = strings(r['inputArtifactRefs'], 'inputArtifactRefs')
+                if any(ref not in {a['id'] for a in p['artifacts']} for ref in refs):
+                    raise ProjectError('Unknown input artifact version')
+                i['inputArtifactRefs'] = refs
             for key in ('title', 'brief', 'nextAction'):
                 if key in r:
                     i[key] = text(r[key], key)
@@ -267,8 +331,9 @@ class Store:
                 evidence = {a['id']: a for a in p['artifacts'] if a.get('workItemId') == i['id']}
                 if any(ref not in evidence or evidence[ref]['status'] != 'accepted' for ref in refs):
                     raise ProjectError('Acceptance needs this task\'s reviewed, accepted artifacts')
-                if any(file_hash(evidence[ref]['path']) != evidence[ref]['sha256'] for ref in refs):
-                    raise ProjectError('Accepted evidence changed; register and review a new version')
+                from .artifacts import verify
+                for ref in refs:
+                    verify(evidence[ref])
                 i['acceptedEvidenceRefs'] = refs
             if target in ('ready', 'cancelled'):
                 run = next((x for x in p['runs'] if x['id'] == i['activeRunId']), None)
@@ -276,6 +341,15 @@ class Store:
                     raise ProjectError('Execution is still live/uncertain. Reconcile it before rescheduling or cancelling.')
                 i['activeRunId'] = None
             i.update(status=target, resolution=note)
+            if target in ('accepted', 'resolved', 'cancelled'):
+                i.update(waitingOn=None, question=None, checkpointAt=None)
+            if target in ('accepted', 'resolved'):
+                from .coordination import enqueue
+                for dependent in p['items']:
+                    if i['id'] in dependent['dependencyIds'] and dependent['status'] == 'ready' and all(
+                            self.item(p, dep)['status'] in ('accepted', 'resolved') for dep in dependent['dependencyIds']):
+                        enqueue(self, p, 'dependency', {'text': 'Dependencies are ready; PM should review the next action'},
+                                dependent['id'], event_id='event-' + hashlib.sha256((p['id'] + ':' + r['requestId'] + ':' + dependent['id']).encode()).hexdigest()[:32])
         else:
             raise ProjectError(f'Unknown operation: {op}')
         i.update(revision=i['revision'] + 1, updatedAt=now(), updatedBy=p['main']['id'])
@@ -300,17 +374,35 @@ class Store:
         if any(a['id'] == aid for a in p['artifacts']):
             raise ProjectError('Artifact id already exists; submit a new version with a new id')
         item = self.item(p, run['workItemId'] if run else r.get('workItemId'))
-        candidate = Path(text(r.get('path'), 'artifact path')).expanduser()
-        if not candidate.is_absolute():
-            raise ProjectError('Artifact path must be absolute')
-        location = str(candidate.resolve(strict=True))
+        from .artifacts import KINDS, publish
+        metadata = dict(kind=r.get('kind', 'document'), storage='external')
+        if metadata['kind'] not in KINDS:
+            raise ProjectError('Unknown artifact kind')
+        # Validate ledger metadata before publication; a rolled-back publication is
+        # reusable under the same id/content, never overwritten on retry.
+        title = text(r.get('title', 'Research brief' if metadata['kind'] == 'research' else Path(r.get('path', 'Artifact')).name), 'artifact title', 300)
+        version = text(r.get('version', '1'), 'version', 80)
+        source_ref = text(r.get('sourceRef', run['id'] if run else ''), 'sourceRef')
+        family = identifier(r.get('familyId', aid))
+        previous = r.get('previousVersionId')
+        if previous and previous not in {a['id'] for a in p['artifacts'] if a.get('familyId', a['id']) == family}:
+            raise ProjectError('Previous artifact version must belong to the same family')
+        if 'bundle' in r:
+            metadata = publish(self, p, aid, r)
+            location = metadata.pop('path')
+        else:
+            candidate = Path(text(r.get('path'), 'artifact path')).expanduser()
+            if not candidate.is_absolute():
+                raise ProjectError('Artifact path must be absolute')
+            location = str(candidate.resolve(strict=True))
         path = Path(location)
         if not path.is_file() or path.stat().st_size > 10 * 1024 * 1024:
             raise ProjectError('Artifact must be a file of at most 10 MiB')
         digest = file_hash(path)
-        a = dict(id=aid, title=text(r.get('title', path.name), 'artifact title', 300), path=location,
-                 workItemId=item['id'], runId=run['id'] if run else None, version=text(r.get('version', '1'), 'version', 80),
-                 status='review', sha256=digest, createdAt=now(), sourceRef=text(r.get('sourceRef', run['id'] if run else ''), 'sourceRef'))
+        a = dict(id=aid, title=title, path=location, **metadata,
+                 workItemId=item['id'], runId=run['id'] if run else None, version=version,
+                 familyId=family, previousVersionId=previous, disposition='undecided', validity='current',
+                 status='review', sha256=digest, createdAt=now(), sourceRef=source_ref)
         p['artifacts'].append(a)
         item['artifactIds'].append(aid)
         return a
@@ -328,7 +420,9 @@ class Store:
             item = self.item(p, run['workItemId'])
             if item['activeRunId'] != run['id'] or run['state'] != 'running' or item['status'] not in ('running', 'blocked', 'review'):
                 raise ProjectError('Late report for an inactive run; Main must review it explicitly')
-            report = dict(id=request['requestId'], text=text(request.get('text'), 'report'), at=now())
+            from .coordination import report_fields, enqueue
+            fields = report_fields(request)
+            report = dict(id=request['requestId'], text=text(request.get('text'), 'report'), at=now(), **fields)
             artifacts = request.get('artifacts', [])
             if not isinstance(artifacts, list) or len(artifacts) > 50:
                 raise ProjectError('Invalid report artifacts')
@@ -338,8 +432,12 @@ class Store:
                 self.add_artifact(p, artifact, run)
             run.setdefault('reports', []).append(report)
             # Worker submission requests review, it cannot accept its own work.
-            if request.get('submitted') is True:
+            if request.get('submitted') is True or fields['kind'] == 'submitted':
                 item['status'] = 'review'
+            item.update({key: value for key, value in fields.items() if key != 'kind'})
+            item['lastProgressAt'] = report['at']
+            enqueue(self, p, fields['kind'], report, item['id'], run['id'],
+                    event_id='event-' + hashlib.sha256((project_id + ':' + run['id'] + ':' + request['requestId']).encode()).hexdigest()[:32])
             item.update(revision=item['revision'] + 1, updatedAt=now(), updatedBy=run['id'])
             p['revision'] += 1
             self.save(p)
@@ -351,7 +449,7 @@ class Store:
         return [dict(r) | {'payload': json.loads(r['payload'])} for r in self.db.execute(
             'SELECT seq,request_id,actor,revision,at,payload FROM events WHERE project_id=? ORDER BY seq DESC LIMIT 100', (project_id,))]
 
-    def read_artifact(self, project_id, artifact_id):
+    def read_artifact(self, project_id, artifact_id, member=None, offset=0):
         p = self.get(project_id)
         if artifact_id == 'pm':
             path, expected = Path(p['pmPath']), None
@@ -359,7 +457,10 @@ class Store:
             a = next((x for x in p['artifacts'] if x['id'] == artifact_id), None)
             if not a:
                 raise ProjectError('Unknown artifact')
-            path, expected = Path(a['path']), a['sha256']
+            from .artifacts import preview
+            return preview(a, member, offset)
+        if member or offset:
+            raise ProjectError('Project narrative does not support bundle navigation')
         with path.open('rb') as source:
             raw = source.read(10 * 1024 * 1024 + 1)
         if len(raw) > 10 * 1024 * 1024:

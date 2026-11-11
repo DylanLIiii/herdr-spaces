@@ -1,5 +1,16 @@
 # 验证记录
 
+## 0.4.0 PM 协调与研究闭环
+
+- `npm run check`、`npm test`（**97 Python + 32 JavaScript**）、`git diff --check` 通过。覆盖旧 schema 事务迁移、回报幂等/回滚、检查点去重、消息不明与 PM 交接、配置暂缓/恢复、角色路由、真实 Git worktree 隔离、输入证据变更拒绝、产物发布中断及版本关联。
+- **27 项真实 Core 与 Linux/Xvfb 原生检查通过**，见 [result.json](coordination/result.json)。使用官方 SHA-256 校验通过的 Herdr App 0.1.15、现有 Core 0.1.19、隔离 socket/账本/app home 和确定性 PM/Research 程序；没有模型调用。验证服务停止期间回报保留、重启通知、服务崩溃恢复、PM 交接、旧身份失效、研究核验/采用/后续任务，以及清理执行目录后已发布报告仍可读取。
+- 已直接查看真实截图：[项目](coordination/project.png)、[研究阅读](coordination/reader.png)、[320px 长内容](coordination/long-narrow.png)、[离线阅读](coordination/offline-narrow.png)、[420×600 首次绑定](coordination/setup-first-narrow.png)、[交接](coordination/setup-handoff-narrow.png)、[暗色错误状态](coordination/setup-error-dark.png)、[浅色配置](coordination/setup-light.png)。窄布局正文可滚动，底部操作固定；错误提示与重试保留在可见区域；长来源链接改为可读标签。首次配置清楚提示由 PM 询问是否开始。
+- **8 项真实远端 machine --via 协议检查通过**，见 [remote-result.json](coordination/remote-result.json)：双客户端共享一份远端成果、哈希与成员读取、错误来源拒绝、断线无本地回退、重连身份保持、正文检索。环境为同机隔离 Core，未宣称物理主机 SSH 端到端验证。
+- 两个主要生产 mod 及安装副本通过 `herdr-app check`，机械设计检测返回空列表。JS 回归覆盖键盘导航、输入焦点、问题分流、成果版本与成员切换、迟到异步响应及配置入口；这不等同完整屏幕阅读器审计。
+- macOS 真实 Core 闭环曾通过，但后续隔离窗口返回重复旧 GPU 帧；加入截图不同场景校验后拒绝使用这些画面作为视觉证据。最终发布的本轮截图全部来自 Linux/Xvfb。没有鼠标/键盘自动化操作用户的日常显示器；测试结束关闭自己创建的 Core、窗口、服务和显示。
+- Feynman/OpenCode 命令按本机实际 help 核对，真实模型/检索/实验未调用；fixture 只验证契约和交付链路。能力未实测时配置保持待验证。服务不自动配置开机自启，机器重启后通过 `service start` 或既有进程管理器恢复。
+- 完整要求映射与边界见 [implementation-coverage.md](implementation-coverage.md)，使用与迁移见 [coordination-guide.md](coordination-guide.md)。下方 0.3.x 记录为历史基线，不作为本轮新增证据。
+
 0.3.1 修复与下列 0.3.0 基线均在 Linux、Python 3.12、Node 24、Herdr App 0.1.14 与 hc 0.1.19 上验证。所有原生运行使用独立 app home、SQLite 目录、core session/socket 和 Xvfb 显示。测试结束后关闭了这些测试进程；用户当前的终端、core、布局、settings 与后端 Hooks 未改动。
 
 ## BoardUI 参考的原生 UI/UX 改造（未发布）

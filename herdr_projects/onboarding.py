@@ -26,7 +26,7 @@ def setup(store, address):
                 binding=store.snapshot(address, scopes=scopes)['binding'],
                 defaults=manager.settings({}),
                 tools=[dict(id=backend, available=bool(shutil.which(backend))) for backend in manager.BACKENDS],
-                projects=[{k: p[k] for k in ('id', 'name', 'goal', 'cwd', 'main')} | manager.settings(p) for p in projects])
+                projects=[{k: p[k] for k in ('id', 'name', 'goal', 'cwd', 'main', 'setup', 'configuration')} | manager.settings(p) for p in projects])
 
 
 def bind(store, address, core_scope, project_id, name=None, goal=None, cwd=None,
@@ -78,6 +78,8 @@ def bind(store, address, core_scope, project_id, name=None, goal=None, cwd=None,
                 for key in ('command', 'exitCode', 'endedAt', 'reconciled'):
                     main.pop(key, None)
                 store.bind(project_id, address, scopes[0], 'main')
+                from .coordination import handoff
+                handoff(store, p)
             if not same or changed:
                 p.update(preferences)
                 main['notice'] = None
@@ -125,7 +127,10 @@ def introduction(store, project_id):
 {runtime.cli_prefix(store)} skill --project {shlex.quote(project_id)}
 {runtime.cli_prefix(store)} skill --project {shlex.quote(project_id)} --list
 {runtime.cli_prefix(store)} context --project {shlex.quote(project_id)}
-按 Skill 引用使用 skill --resource 相对路径读取全文。先核对项目的 SubAgent Coding 工具和模型设置，缺失时引导用户配置。
+激活本项目的首次配置 Skill（自定义 PM Skill 也使用此入口）：
+{runtime.cli_prefix(store)} skill --project {shlex.quote(project_id)} --setup
+按 Skill 引用使用 skill --resource 相对路径读取全文。读取 show 中的 setup 状态：尚未邀请且用户未同意时，由你询问是否现在开始配置；已同意、已暂缓或接任时续接记录，不重复询问。
+此绑定只建立 PM 身份；用户同意开始后才检查环境和推荐 SubAgent 配置。完成绑定不等于完成配置。
 任务变化通过此项目 CLI 维护；不要重复创建 Leader。此消息只建立项目职责，不新增合并、部署或派发授权。'''
 
 

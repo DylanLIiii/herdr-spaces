@@ -2,9 +2,9 @@
 from pathlib import Path
 
 from .store import ProjectError, text
+from .teams import BACKENDS
 
 BUILTIN_SKILL = Path(__file__).resolve().parent / 'skills/project-manager/SKILL.md'
-BACKENDS = ('pi', 'claude', 'codex')
 
 
 def settings(project):
@@ -32,7 +32,7 @@ def configure(project, pm_skill=None, backend=None, model=None):
     agent = dict(result['subAgent'])
     if backend is not None:
         if backend not in BACKENDS:
-            raise ProjectError('Coding 工具必须是 pi、claude 或 codex。')
+            raise ProjectError('工具必须是 pi、claude、codex、opencode 或 feynman。')
         # A model name belongs to the selected backend, not all backends.
         if backend != agent['backend']:
             agent['model'] = None
@@ -68,18 +68,29 @@ def list_resources(project):
                   if p.is_file() and p.resolve().is_relative_to(root))
 
 
-def worker_command(project, backend=None, model=None, custom=None):
+def worker_command(project, backend=None, model=None, custom=None, profile=None):
     from .runtime import command
     preferences = settings(project)['subAgent']
-    selected = backend or preferences['backend']
-    selected_model = model if model is not None else (preferences.get('model') if selected == preferences['backend'] else None)
+    selected = profile['backend'] if profile else backend or preferences['backend']
+    selected_model = profile.get('model') if profile else model if model is not None else (preferences.get('model') if selected == preferences['backend'] else None)
     if custom is not None:
         if model is not None:
             raise ProjectError('使用 --command-json 时，请在 argv 中指定模型。')
         return command(custom, selected)
     # Herdr requires per-terminal Codex processes so commands keep their own
     # terminal identity instead of inheriting a shared daemon's environment.
-    argv = [selected, '--no-daemon'] if selected == 'codex' else [selected]
+    if selected == 'opencode':
+        argv = ['opencode', '--standalone', 'mini']
+    elif selected == 'codex':
+        argv = ['codex', '--no-daemon']
+    elif selected == 'feynman':
+        argv = ['feynman', '--new-session']
+    else:
+        argv = [selected]
     if selected_model:
         argv += ['--model', text(selected_model, 'model', 300)]
+    if selected == 'opencode':
+        argv += ['--prompt']
+    if selected == 'feynman':
+        argv += [profile.get('workflow', 'deepresearch') if profile else 'chat']
     return command(argv + ['{context}'], selected)

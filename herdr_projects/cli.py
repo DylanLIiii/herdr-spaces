@@ -6,19 +6,34 @@ import sqlite3
 import sys
 
 from .store import ProjectError, Store, default_home, identity_from_env
-from . import __version__, runtime, onboarding, manager
+from . import __version__, runtime, onboarding, manager, coordination, setup_flow, teams
+from .schema import SCHEMA_VERSION, CAPABILITIES
 
 PROTOCOL_VERSION = 1
 
 OPERATIONS = {
     'todo.add': ['requestId', 'id?', 'title', 'sourceRef', 'brief?', 'nextAction?'],
     'todo.promote': ['requestId', 'id', 'brief', 'acceptanceCriteria[]'],
-    'item.update': ['requestId', 'id', 'title?', 'brief?', 'nextAction?', 'dependencyIds[]?', 'checklist[{title,done}]?'],
+    'item.update': ['requestId', 'id', 'title?', 'brief?', 'nextAction?', 'phase?', 'waitingOn?', 'question?', 'checkpointAt?', 'inputArtifactRefs[]?', 'researchContract?', 'dependencyIds[]?', 'checklist[{title,done}]?'],
     'item.status': ['requestId', 'id', 'status', 'note', 'evidenceRefs[] (required for accepted)'],
-    'artifact.add': ['requestId', 'id?', 'workItemId', 'path (existing absolute file)', 'title?', 'version?', 'sourceRef'],
+    'artifact.add': ['requestId', 'id?', 'workItemId', 'path (external file) OR bundle {root,entrypoint,files[{path,role}],workflow?,claims[]?,external[]?}', 'kind?', 'title?', 'familyId?', 'previousVersionId?', 'version?', 'sourceRef'],
     'artifact.review': ['requestId', 'id', 'status: accepted|rejected|review', 'note'],
-    'decision.add': ['requestId', 'text', 'sourceRef'],
-    'project.update': ['requestId', 'name?', 'goal?'],
+    'artifact.disposition': ['requestId', 'id', 'disposition: adopted|deferred|declined', 'note'],
+    'artifact.validity': ['requestId', 'id', 'validity: current|stale|superseded', 'supersededBy?', 'note'],
+    'artifact.followup': ['requestId', 'id', 'workItemId?', 'title', 'brief? (creates or reuses a todo; never launches it)'],
+    'decision.add': ['requestId', 'text', 'sourceRef', 'artifactRefs[]?'],
+    'project.update': ['requestId', 'name?', 'goal?', 'stage?', 'summary?'],
+    'inbox.acknowledge': ['requestId', 'ids[]'],
+    'inbox.handle': ['requestId', 'ids[]', 'note'],
+    'inbox.retry': ['requestId', 'ids[]', 'note (explicit reconciliation before retry)'],
+    'setup.invite': ['requestId (PM has read the setup Skill and asked whether to begin)'],
+    'setup.begin': ['requestId', 'sourceRef (user consent)', 'nextAction?'],
+    'setup.defer': ['requestId'],
+    'setup.answer': ['requestId', 'key', 'value', 'nextAction'],
+    'setup.draft': ['requestId', 'configuration (team-template shape)'],
+    'setup.confirm': ['requestId', 'draftRevision', 'sourceRef (specific user confirmation)'],
+    'setup.check': ['requestId', 'configurationRevision', 'key', 'status: passed|failed|unverified', 'mode: observed|fixture', 'evidence'],
+    'setup.finish': ['requestId (all required capabilities must have observed passing evidence)'],
 }
 
 
@@ -45,6 +60,14 @@ def parser():
     commands.add_parser('list')
     commands.add_parser('probe', help='Describe this machine\'s installed runtime without creating a ledger')
     commands.add_parser('operations', help='Describe JSON write operations')
+    commands.add_parser('capabilities', help='Inspect local backend installation without calling models or reading secrets')
+    template = commands.add_parser('team-template', help='Show a portable team configuration for PM review')
+    template.add_argument('--template', choices=teams.TEMPLATES, default='development')
+    template.add_argument('--routing', choices=('direct', 'coding-hub'), default='direct')
+    template.add_argument('--backend', choices=teams.BACKENDS[:-1], default='pi')
+    template.add_argument('--model')
+    service = commands.add_parser('service', help='Project-machine deterministic follow-up service')
+    service.add_argument('mode', choices=('start', 'run', 'stop', 'status', 'tick'))
     snap = commands.add_parser('snapshot', help='Read panel data bound to an exact terminal/core')
     snap.add_argument('--terminal')
     setup = commands.add_parser('setup', help='Inspect an existing terminal and projects on this machine')
@@ -62,13 +85,19 @@ def parser():
     for field in ('project', 'core-scope'):
         notify.add_argument('--' + field, required=True)
     notify.add_argument('--generation', required=True, type=int)
-    for name in ('show', 'context', 'skill', 'history', 'apply', 'report', 'start', 'worker', 'reconcile', '_run', 'read'):
+    for name in ('show', 'context', 'skill', 'history', 'inbox', 'search', 'apply', 'report', 'start', 'worker', 'reconcile', '_run', 'read'):
         sub = commands.add_parser(name)
         sub.add_argument('--project', default=os.environ.get('HERDR_PROJECT_ID'), required=not bool(os.environ.get('HERDR_PROJECT_ID')))
+        if name == 'search':
+            sub.add_argument('--query', required=True)
+        if name == 'inbox':
+            sub.add_argument('--after', type=int, default=0)
+            sub.add_argument('--include-handled', action='store_true')
         if name == 'skill':
             source = sub.add_mutually_exclusive_group()
             source.add_argument('--resource', help='Read a complete text resource relative to the configured Skill directory')
             source.add_argument('--list', action='store_true', help='List all files in the configured Skill directory')
+            source.add_argument('--setup', action='store_true', help='Activate the bundled PM-led setup Skill, including with a custom PM guide')
         if name in ('apply', 'report'):
             sub.add_argument('--file', required=True, help='JSON request file, or - for stdin')
         if name in ('apply', 'worker'):
@@ -81,12 +110,17 @@ def parser():
             sub.add_argument('--tab', help='Existing local tab id; otherwise an execution tab is used')
         if name == 'worker':
             sub.add_argument('--item', required=True)
+            sub.add_argument('--role', choices=teams.ROLES[1:], default='worker')
+            sub.add_argument('--tier', choices=teams.TIERS)
+            sub.add_argument('--workflow', choices=('deepresearch', 'autoresearch'))
         if name in ('context', 'reconcile', '_run'):
             sub.add_argument('--run', default=os.environ.get('HERDR_RUN_ID') if name == 'context' else None)
         if name == '_run':
             sub.add_argument('--token', required=True)
         if name == 'read':
             sub.add_argument('--artifact', required=True)
+            sub.add_argument('--member', help='Relative member of a published bundle')
+            sub.add_argument('--offset', type=int, default=0, help='Byte offset for bounded text reading')
             sub.add_argument('--core-scope', help='Refuse if the connected core changed since the panel snapshot')
             sub.add_argument('--ledger-home', help='Refuse if the selected ledger changed since the panel snapshot')
     return p
@@ -97,8 +131,12 @@ def main(argv=None):
     store = None
     try:
         if args.action == 'probe':
-            result = dict(protocolVersion=PROTOCOL_VERSION, schemaVersion=1, version=__version__,
-                          ledgerHome=str(Path(args.home or default_home()).expanduser().resolve()), capabilities=['leader-bind', 'guarded-introduction', 'core-command-discovery', 'pm-configuration'])
+            result = dict(protocolVersion=PROTOCOL_VERSION, schemaVersion=SCHEMA_VERSION, version=__version__,
+                          ledgerHome=str(Path(args.home or default_home()).expanduser().resolve()), capabilities=CAPABILITIES)
+        elif args.action == 'capabilities':
+            result = dict(backends=teams.capabilities(), roles=teams.ROLE_GUIDANCE)
+        elif args.action == 'team-template':
+            result = teams.template(args.template, args.routing, args.backend, args.model)
         elif args.action == 'operations':
             result = dict(operations=OPERATIONS, note='All apply requests require op, requestId and the current project revision. Call from the managed Main terminal. Replaying the same requestId/content is idempotent.')
         else:
@@ -110,7 +148,11 @@ def main(argv=None):
             if action == 'read' and args.ledger_home and ledger_home != args.ledger_home:
                 raise ProjectError('Selected ledger changed; refresh the project before reading evidence')
             store = Store(args.home)
-            if action == 'create':
+            if action == 'service':
+                result = {'start': coordination.service_start, 'run': coordination.service_run,
+                          'stop': coordination.service_stop, 'status': coordination.service_status,
+                          'tick': coordination.service_tick}[args.mode](store)
+            elif action == 'create':
                 result = store.create(args.id, args.name, args.goal, args.cwd, args.pm)
             elif action == 'list':
                 result = store.snapshot()['projects']
@@ -127,8 +169,13 @@ def main(argv=None):
             elif action == 'show':
                 result = store.public(store.get(args.project))
                 result.update(manager.settings(result))
+                if result['configuration']['revision']:
+                    result['setup']['requiredChecks'] = setup_flow.required_checks(result['configuration'])
             elif action == 'skill':
                 project = store.get(args.project)
+                if args.setup:
+                    print(setup_flow.skill(), end='')
+                    return 0
                 if args.list:
                     result = dict(path=manager.settings(project)['pmSkill'], resources=manager.list_resources(project))
                 else:
@@ -139,24 +186,46 @@ def main(argv=None):
                 return 0
             elif action == 'history':
                 result = store.history(args.project)
+            elif action == 'inbox':
+                result = coordination.inbox(store, args.project, args.after, args.include_handled)
+            elif action == 'search':
+                from .artifacts import search
+                result = dict(artifacts=search(store.public(store.get(args.project)), args.query))
             elif action == 'apply':
-                result = store.apply(args.project, args.revision, read_json(args.file), identity_from_env(store))
+                request = read_json(args.file)
+                result = store.apply(args.project, args.revision, request, identity_from_env(store))
+                if request.get('op') == 'setup.confirm' and not result.get('replayed') and result['project']['configuration']['followup']['enabled']:
+                    try:
+                        result['service'] = coordination.service_start(store)
+                    except (OSError, ProjectError) as exc:
+                        result['service'] = dict(state='unavailable', error=str(exc))
             elif action == 'report':
                 request = read_json(args.file)
                 if not isinstance(request, dict):
                     raise ProjectError('Report must be an object')
                 result = store.report(args.project, request, identity_from_env(store))
             elif action in ('start', 'worker'):
-                argv = manager.worker_command(store.get(args.project) if action == 'worker' else {}, args.backend,
-                                              args.model, json.loads(args.command_json) if args.command_json else None)
+                project = store.get(args.project) if action == 'worker' else {}
+                profile = teams.resolve(project, args.role, args.backend, args.model, args.tier) if action == 'worker' else None
+                if profile and args.command_json:
+                    profile['customCommand'] = True
+                    profile['fallbackReason'] = None
+                    profile['requestedModel'] = profile.get('model')
+                    profile['model'] = None
+                if action == 'worker' and args.workflow:
+                    if args.role != 'research':
+                        raise ProjectError('--workflow applies only to Research')
+                    profile['workflow'] = args.workflow
+                argv = manager.worker_command(project, args.backend, args.model,
+                                              json.loads(args.command_json) if args.command_json else None, profile)
                 result = runtime.start(store, args.project, argv, args.space, args.tab,
-                                       getattr(args, 'item', None), getattr(args, 'revision', None), identity_from_env(store))
+                                       getattr(args, 'item', None), getattr(args, 'revision', None), identity_from_env(store), profile=profile)
             elif action == 'reconcile':
                 result = runtime.reconcile(store, args.project, args.run)
             elif action == '_run':
                 return runtime.execute(store, args.project, args.token, args.run)
             elif action == 'read':
-                result = store.read_artifact(args.project, args.artifact)
+                result = store.read_artifact(args.project, args.artifact, args.member, args.offset)
                 result.update(protocolVersion=PROTOCOL_VERSION, coreScope=scopes[0] if scopes else None, ledgerHome=ledger_home)
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0

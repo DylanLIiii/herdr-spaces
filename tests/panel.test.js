@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
-import { groups, summary, sessionStatus, location } from '../mods/project/model.js';
+import { groups, summary, sessionStatus, location, needsPerson, artifactMatches } from '../mods/project/model.js';
 
 const fixture = id => ({id,name:id,goal:'A goal',cwd:'/repo',revision:3,
   main:{id:'main-'+id,state:'running',terminal:id+'-main'},
@@ -33,10 +33,11 @@ async function host(options={}){
   const context=vm.createContext({console,Set,Map,JSON,Date});
   const exports={
     'gpui-kit':{View:class{},div:element,svg:element},
-    'gpui-base':{h_flex:element,v_flex:element,TextView:{markdown:(_id,text)=>element().child(text)}},
+    'gpui-base':{h_flex:element,v_flex:element,TextView:{markdown:(_id,text)=>element().child(text)},Input:{new:element},
+      InputState:{new:({value})=>({text:value,callbacks:{},value(){return this.text;},set_value(v){this.text=v;},on(k,fn){this.callbacks[k]=fn;}})}},
     herdr:{props:()=>({entry:'/app/project.py',dataHome:'/local/ledger',...options.config}),exec:(command,args,opts)=>new Promise((resolve,reject)=>state.pending.push({command,args,options:opts,resolve,reject})),
       spaces:()=>[state.space],panes:()=>state.live.map(t=>({terminal:t.address})),focused:()=>state.focus,terminals:()=>state.live,
-      theme:()=>({}),layout:()=>null,nextCommand:()=>new Promise(()=>{}),run:(name,args)=>state.calls.push({name,args}),openOverlay:spec=>state.calls.push({name:'overlay',args:spec})},
+      theme:()=>({}),layout:()=>null,nextCommand:()=>new Promise(()=>{}),run:(name,args)=>state.calls.push({name,args}),openOverlay:spec=>state.calls.push({name:'overlay',args:spec}),closeOverlay:id=>state.calls.push({name:'closeOverlay',args:{id}})},
   };
   const modules=new Map();
   const load=async path=>{
@@ -173,5 +174,33 @@ test('closing during a read prevents updates and renders no new composer',async(
   const h=await host();h.view.close();const count=h.state.notify;await h.respond(fixture('a'));
   assert.equal(h.view.project,null);assert.equal(h.state.notify,count);
   const source=await readFile(new URL('../mods/project/main.js',import.meta.url),'utf8');
-  assert.doesNotMatch(source,/TextareaState|InputState|hc\(['"]send|terminal\.run/);
+  assert.doesNotMatch(source,/TextareaState|hc\(['"]send|terminal\.run/);
+});
+
+test('user questions and PM queue use separate records and counts',async()=>{
+ const h=await host();const p=fixture('a');p.items[0].question={text:'Which benchmark?',recipient:'user',recommendation:'Use baseline'};p.items[0].waitingOn='user';
+ await h.respond(p);let root=h.view.render(h.cx);assert.ok(find(root,'human-todo'));assert.match(allText(root),/待 PM 处理 1/);
+ find(root,'project-attention').events.click({},h.cx);root=h.view.render(h.cx);assert.equal(find(root,'work-todo'),null);assert.ok(find(root,'work-task'));
+ assert.equal(needsPerson({...p.items[0],status:'cancelled'}),false);h.view.close();
+});
+
+test('research detail separates verification, disposition and versions and opens a scoped reader',async()=>{
+ const h=await host();const p=fixture('a');p.artifacts=[{id:'study',familyId:'study',title:'Study',version:'1',kind:'research',status:'accepted',disposition:'declined',validity:'current',path:'/published/manifest.json',storage:'managed',workItemId:'task',claims:[]},{id:'study2',familyId:'study',title:'Study revised',version:'2',status:'review',path:'/published/v2/manifest.json'}];
+ await h.respond(p,0,{schemaVersion:2});h.view.openFile('study',h.cx);
+ await h.respond(null,0,{coreScope:'core:local',text:'Research conclusion',files:[{path:'brief.md',role:'brief'}],nextOffset:64000});
+ const root=h.view.render(h.cx);assert.match(allText(root),/已核验/);assert.match(allText(root),/不采用/);assert.ok(find(root,'version-study2'));assert.ok(find(root,'member-brief.md'));
+ find(root,'artifact-reader').events.click({},h.cx);const spec=h.state.calls.at(-1).args;assert.equal(spec.kind,'window');assert.equal(spec.props.reader.projectId,'a');assert.equal(spec.props.reader.artifact,'study');
+ find(root,'artifact-next').events.click({},h.cx);assert.equal(h.state.pending[0].args.at(-1),'64000');h.view.close();
+});
+
+test('artifact filters and asynchronous full-text search preserve current project scope',async()=>{
+ const h=await host();const p=fixture('a');p.artifacts=[{id:'a1',title:'Latency study',kind:'research',sourceRef:'paper'},{id:'a2',title:'Other',kind:'document'}];await h.respond(p);
+ h.view.query.text='latency';assert.equal(h.view.visibleArtifacts(p).length,1);assert.equal(artifactMatches(p.artifacts[0],'LATENCY'),true);
+ h.view.search(h.cx);const request=h.state.pending.shift();assert.ok(request.args.includes('search'));h.view.query.text='other';h.view.query.callbacks.change({},h.cx);
+ request.resolve({code:0,stdout:JSON.stringify({artifacts:[p.artifacts[0]]})});await turn();assert.equal(h.view.searchResults,null);assert.equal(h.view.visibleArtifacts(p)[0].id,'a2');h.view.close();
+});
+
+test('out-of-order member previews cannot replace a newer selection',async()=>{
+ const h=await host();await h.respond(fixture('a'));h.view.openFile('report',h.cx,'brief.md');h.view.openFile('report',h.cx,'provenance.md');
+ await h.respond(null,1,{coreScope:'core:local',text:'provenance'});await h.respond(null,0,{coreScope:'core:local',text:'old brief'});assert.equal(h.view.preview.text,'provenance');h.view.close();
 });

@@ -1,4 +1,4 @@
-"""Managed native terminals; no daemon, backend hooks or text scraping required."""
+"""Managed native terminals; native PTYs and explicit durable project contracts."""
 from contextlib import contextmanager
 import fcntl
 import json
@@ -12,7 +12,7 @@ import subprocess
 import sys
 
 from .store import ProjectError, core_scope, identifier, now, text, uid
-from . import manager
+from . import manager, teams, workspaces
 
 ROOT = Path(__file__).resolve().parent.parent
 ENTRY = ROOT / 'project.py'
@@ -141,6 +141,21 @@ def context(store, project_id, run_id=None):
   {cmd} report --project {shlex.quote(p['id'])} --file /absolute/report.json
 报告 JSON 示例：{{"requestId":"report-unique-id","text":"具体进展和验证结果","submitted":true,"artifacts":[{{"id":"evidence-unique-id","path":"/absolute/report.md","title":"验证报告","version":"1"}}]}}
 不要额外派发 Worker，除非用户明确授权。不要将进程结束等同于交付验收。
+角色：{run.get('execution', {}).get('role', 'worker')}。
+职责：{teams.ROLE_GUIDANCE.get(run.get('execution', {}).get('role', 'worker'), '')}
+工作目录：{run.get('cwd', p['cwd'])}；参考项目目录：{p['cwd']}。
+持久输出目录：{run.get('outputRoot', '使用明确的持久目录')}。
+已锁定输入产物摘要：{json.dumps([{k: str(a.get(k, ''))[:300] for k in ('id', 'version', 'sha256')} for a in run.get('inputArtifacts', [])[:20]], ensure_ascii=False)}。完整输入与路径请读取 show 中当前 Run 的 inputArtifacts。
+使用结构化 kind=progress/question/blocked/submitted/failed 报告；阶段 phase、下一步 nextAction、checkpointAt 和 waitingOn 可单独提供。
+问题使用 question={{"text":"需要决定的事","recipient":"pm 或 user","recommendation":"建议"}}。
+'''
+        if run.get('execution', {}).get('role') == 'research':
+            rules += f'''研究执行方式：{run['execution'].get('workflow', 'deepresearch')}。
+在输出目录保留研究计划、草稿、引用稿、最终 brief 和 provenance；逐项核对关键结论的来源、适用条件和局限。
+Autoresearch 契约摘要：{json.dumps(task.get('researchContract'), ensure_ascii=False)[:4000]}。完整契约从 show 的当前任务读取，按其范围与迭代上限执行。
+有实验时保留 baseline、可重放命令、配置、指标、seed 和全部尝试的 keep/revert/failed 记录。
+已有结论足以支持决策时收束；负面结果可以是成功研究，执行失败和证据不足必须分别说明。
+通过 report 提交研究包和结论；不能自行宣称项目采用了建议。发布格式通过 operations 查询。
 '''
     else:
         preferences = manager.settings(p)
@@ -151,8 +166,11 @@ Skill 入口：{preferences['pmSkill']}
   {cmd} skill --project {shlex.quote(p['id'])} --list
   {cmd} skill --project {shlex.quote(p['id'])} --resource RELATIVE_PATH
 若宿主 Agent 限制文件或 CLI 访问，请按其正常权限流程处理；绑定不修改宿主的沙箱配置。
-SubAgent 配置：{json.dumps(preferences['subAgent'], ensure_ascii=False)}
-核对 Coding 工具和模型；模型为空时使用工具默认模型。引导用户补全配置、工具安装和登录。
+兼容 SubAgent 默认配置：{json.dumps(preferences['subAgent'], ensure_ascii=False)}
+首次配置与恢复先激活专用 Skill：
+  {cmd} skill --project {shlex.quote(p['id'])} --setup
+配置阶段：{p.get('setup', {}).get('state', 'pending')}；配置版本：{p.get('configuration', {}).get('revision', 0)}。
+由指定 PM 询问是否开始。已有同意和回答从 show 恢复；暂缓不催问。Skill 引导角色、工具、模型、成果目录与自动跟进；配置成功不代表业务任务已授权。
 在目标、任务、阻塞、证据、决策有实质变化时维护账本；无需每轮刷记录。
 维护步骤：show 读取 revision → 写 JSON 请求文件 → apply。冲突后重读，不盲目覆盖。
   {cmd} apply --project {shlex.quote(p['id'])} --revision REVISION --file /absolute/request.json
@@ -162,6 +180,11 @@ SubAgent 配置：{json.dumps(preferences['subAgent'], ensure_ascii=False)}
 派发 Worker 前确认授权、范围、依赖和验收标准，使用：
   {cmd} worker --project {shlex.quote(p['id'])} --item WORK_ID --revision REVISION
 此命令使用项目保存的 Coding 工具和模型；可用 --backend / --model 单次覆盖，或 --command-json 自定义完整 argv。
+使用持久收件箱跟进 Worker 回报与检查点：
+  {cmd} inbox --project {shlex.quote(p['id'])}
+读取后 apply inbox.acknowledge（ids），处理后 apply inbox.handle（ids、note）。一次通知可包含多个事件；完整记录以 inbox 为准。
+普通进展只入账，问题、结果、检查点由跟进服务通知。sending/sent 不代表已读取；uncertain 不得盲目重发或重派任务。
+检查点到期先核对现有执行；等待用户、等待 PM、依赖和环境应分别记录。服务状态使用 service status 查询。
 Worker 报告只能进入待核验。先核验证据，再 artifact.review，最后 item.status accepted 并给 evidenceRefs。
 空闲、done、进程退出、步骤勾选均不代表验收。验收不代表合并或部署授权。
 Main 进程重新启动仍是同一个 Main；不要创建另一个项目 owner。
@@ -180,7 +203,7 @@ Main 进程重新启动仍是同一个 Main；不要创建另一个项目 owner�
     return rules
 
 
-def start(store, project_id, argv, space=None, tab=None, item_id=None, revision=None, identity=None):
+def start(store, project_id, argv, space=None, tab=None, item_id=None, revision=None, identity=None, profile=None):
     identifier(project_id)
     if item_id:
         identifier(item_id)
@@ -207,8 +230,11 @@ def start(store, project_id, argv, space=None, tab=None, item_id=None, revision=
                     raise ProjectError('Dependencies are not accepted/resolved')
                 if p['main']['scope'] not in scopes:
                     raise ProjectError('Use the project\'s own core session')
+                profile = profile or teams.resolve(p)
+                workspaces.check_writer(store, p, profile)
+                workspaces.research_contract(item, profile)
                 record = dict(id=uid('run'), workItemId=item_id, token=uid('token'), state='starting',
-                              terminal=None, scope=scope, command=argv, createdAt=now(), reports=[])
+                              terminal=None, scope=scope, command=argv, createdAt=now(), reports=[], execution=profile)
                 p['runs'].append(record)
                 item.update(activeRunId=record['id'], status='running', revision=item['revision'] + 1, updatedAt=now())
                 space = space or p['main'].get('space')
@@ -218,6 +244,8 @@ def start(store, project_id, argv, space=None, tab=None, item_id=None, revision=
                     return dict(started=False, main=store.public(p)['main'], hint='An owner is already registered. Navigate to its terminal; use reconcile after an interrupted launch or exit.')
                 record.update(generation=record['generation'] + 1, token=uid('token'), state='starting', mode='managed',
                               terminal=None, scope=scope, command=argv, startedAt=now(), notice=None)
+                from .coordination import handoff
+                handoff(store, p)
             # Unique labels make a lost launcher response discoverable.
             space = space or 'hp-' + project_id
             tab = tab or ('hp-' + record['id'])
@@ -227,7 +255,27 @@ def start(store, project_id, argv, space=None, tab=None, item_id=None, revision=
             store.event(p, uid('launch'), '', p['main']['id'], dict(op='run.reserve' if item_id else 'main.reserve', id=record['id']))
             token = record['token']
             run_id = record['id'] if item_id else None
-        args = ['run', '--json', '--bg', '--keep', '--no-parent', '--no-notify', '--cwd', p['cwd'],
+        if run_id:
+            try:
+                workspace = workspaces.prepare(store, p, record, profile)
+            except (ProjectError, OSError) as exc:
+                with store.transaction():
+                    failed = store.get(project_id)
+                    execution = next(r for r in failed['runs'] if r['id'] == run_id)
+                    execution.update(state='exited', endedAt=now(), exitCode=1, error=str(exc))
+                    task = store.item(failed, item_id)
+                    task.update(status='blocked', waitingOn='pm', resolution=str(exc))
+                    from .coordination import enqueue
+                    enqueue(store, failed, 'failed', dict(text=str(exc)), item_id, run_id)
+                    failed['revision'] += 1
+                    store.save(failed)
+                raise ProjectError(f'Workspace preparation failed; reservation retained for review: {exc}') from exc
+            with store.transaction():
+                p = store.get(project_id)
+                record = next(r for r in p['runs'] if r['id'] == run_id)
+                record.update(workspace)
+                store.save(p)
+        args = ['run', '--json', '--bg', '--keep', '--no-parent', '--no-notify', '--cwd', record.get('cwd', p['cwd']),
                 '--label', 'herdr.space=' + space, '--label', 'herdr.tab=' + tab,
                 '--label', 'projects.project=' + project_id, '--label', 'projects.launch=' + token,
                 '--label', 'projects.role=' + ('worker' if item_id else 'main'), '--',
@@ -284,7 +332,7 @@ def execute(store, project_id, token, run_id=None):
         try:
             # Inherit the terminal, no pipe or replacement TUI. The process lock is
             # inherited too, so an orphaned child does not immediately lose ownership.
-            result = subprocess.run(argv, cwd=p['cwd'], env=env, pass_fds=(process_lock.fileno(),))
+            result = subprocess.run(argv, cwd=record.get('cwd', p['cwd']), env=env, pass_fds=(process_lock.fileno(),))
             code = result.returncode
             return code
         finally:
@@ -296,6 +344,13 @@ def execute(store, project_id, token, run_id=None):
                 if current.get('token') == token:
                     current.update(state='exited', exitCode=code, endedAt=now())
                     # Task business status deliberately does not change on exit.
+                    if run_id:
+                        task = store.item(p, current['workItemId'])
+                        if task['status'] not in ('review', 'accepted', 'cancelled') or code:
+                            from .coordination import enqueue
+                            enqueue(store, p, 'failed' if code else 'execution-ended',
+                                    dict(text='Execution ended; PM must inspect results before recovery or acceptance.', exitCode=code),
+                                    task['id'], run_id, event_id=uid('exit'))
                     store.save(p)
 
 

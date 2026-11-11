@@ -1,6 +1,16 @@
 # Changelog
 
-## Unreleased
+## 0.4.0
+
+- Add transactional schema-2 migration and a durable PM inbox with structured reports, explicit acknowledgement/handling, checkpoint events and safe recovery from uncertain PTY sends.
+- Add an optional project-machine follow-up service, with process locking, deferred delivery to busy PMs, restart recovery and explicit service status.
+- Move first-use configuration to the designated PM through the bundled `herdr-spaces-setup` Skill. Ask whether to begin; persist consent, answers, drafts, confirmations and capability evidence across deferral and handoff.
+- Add portable development/research/mixed role templates, direct or Coding Hub routing, OpenCode/Feynman launch adapters, immutable Run preferences, Worker worktrees and independent research directories.
+- Publish durable, versioned research bundles with manifests, source locators, process files and provenance. Separate report review, recommendation adoption and validity; link decisions and follow-up tasks to exact versions.
+- Add native setup progress, separate human/PM attention, artifact search, member/version navigation and an expanded research reader. Preserve native terminals and project-machine ownership.
+- Extend runtime bundles and remote upgrade capability checks; add deterministic lifecycle integration and regression coverage.
+
+### Earlier unreleased changes included
 
 - Support explicit PM rebinding with generation checks. Preserve the stable Main identity, project records and active Workers while revoking the previous PM credentials and terminal binding.
 - Bundle a complete Project Manager Skill and SubAgent guide, allow a project-specific Skill path, and expose full entry/resource reads through the project CLI.

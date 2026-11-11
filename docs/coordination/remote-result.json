@@ -1,0 +1,16 @@
+{
+  "passed": 8,
+  "checks": [
+    "Remote discovery reports schema 2 and guided setup/bundle capabilities",
+    "Two clients read one published remote artifact version",
+    "Remote bundle integrity and members are preserved",
+    "No second ledger is created on either client",
+    "Remote read refuses changed ledger identity",
+    "Disconnection fails without local fallback",
+    "Reconnect preserves Main identity and artifact hash",
+    "Remote full-text search returns the same version"
+  ],
+  "synthetic": true,
+  "transport": "real hc machine --via; isolated loopback cores, not physical SSH",
+  "scratch": "/private/tmp/hps-remote-75ajrej6"
+}

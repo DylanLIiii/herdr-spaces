@@ -16,6 +16,8 @@ ROOT = Path(__file__).resolve().parent.parent
 def runtime_bundle():
     names = ['project.py', 'LICENSE'] + ['herdr_projects/' + name for name in
         ('__init__.py', 'store.py', 'runtime.py', 'cli.py', 'onboarding.py', 'manager.py',
+         'schema.py', 'coordination.py', 'setup_flow.py', 'teams.py', 'workspaces.py', 'artifacts.py',
+         'skills/herdr-spaces-setup/SKILL.md',
          'skills/project-manager/SKILL.md', 'skills/project-manager/references/subagents.md')]
     files = {name: (ROOT / name).read_text() for name in names}
     digest = hashlib.sha256(json.dumps(files, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
@@ -72,7 +74,7 @@ def install(home, bin_dir, data_home, name='projects', *, runtime_only=False, re
                     shutil.copy2(ROOT / notice, target / notice)
             layout = json.loads((ROOT / 'layouts/projects.json').read_text())
             config = dict(python=sys.executable, entry=str(runtime / 'project.py'), dataHome=str(data_home),
-                          remoteName=remote_name, setupMod=setup, agentsMod=agents,
+                          remoteName=remote_name, panelMod=panel, setupMod=setup, agentsMod=agents,
                           bundle=str(runtime / 'runtime-bundle.json'), bootstrap=str(runtime / 'bootstrap.py'))
             def walk(node):
                 content = node.get('content', {})

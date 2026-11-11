@@ -9,7 +9,15 @@ export function summary(items) {
   const count=(states)=>items.filter(i=>states.includes(i.status)).length;
   return {pending:count(['open','ready']),running:count(['running']),done:count(['accepted','resolved']),blocked:count(['blocked']),review:count(['review'])};
 }
-export function needsAttention(item){return ['blocked','review'].includes(item.status);}
+export function needsAttention(item){return !['accepted','resolved','cancelled'].includes(item.status)&&(['blocked','review'].includes(item.status)||Boolean(item.waitingOn||item.question));}
+export function needsPerson(item){return !['accepted','resolved','cancelled'].includes(item.status)&&item.question?.recipient==='user';}
+export const setupLabels={pending:'等待 PM 询问',configuring:'配置中',deferred:'已暂缓',verifying:'配置已保存 · 待验证',ready:'配置就绪'};
+export const roleLabels={pm:'PM',worker:'开发',explore:'代码探索',librarian:'资料查询',reviewer:'核验',research:'研究',oracle:'疑难分析'};
+export const waitingLabels={pm:'等待 PM',user:'等待你',dependency:'等待依赖',environment:'等待环境'};
+export const reviewLabels={accepted:'已核验',rejected:'需修订',review:'待核验'};
+export const dispositionLabels={undecided:'尚未决定',adopted:'已采用',deferred:'暂缓采用',declined:'不采用'};
+export const validityLabels={current:'当前版本',stale:'需要复核',superseded:'已被替代'};
+export function artifactMatches(artifact,query){return !query||[artifact.title,artifact.kind,artifact.sourceRef,...(artifact.claims||[]).map(c=>c.text)].join(' ').toLowerCase().includes(query.toLowerCase());}
 export function statusColor(status,t) {
   if(['blocked','review'].includes(status))return t.blocked;
   if(status==='running')return t.working;

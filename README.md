@@ -8,17 +8,19 @@ Herdr 的原生项目侧栏，以及由本项目 Main 维护的持久账本。�
 
 - **任务**：待办、待执行、进行中、待核验、已完成；待办提升为任务保留 id 和来源，任务可带步骤、依赖与证据。
 - **会话**：定位本项目 Main 和 Workers。终端的 idle / done 不会把任务标成完成。
-- **资料**：pm.md、决策和带来源/版本的产物，预览检测文件是否已改变。
+- **成果**：pm.md、决策、研究包与带来源/版本的产物；区分核验、采用和当前有效性，支持正文搜索、来源及版本阅读。
 - 面板获得键盘焦点后，`1 / 2 / 3` 切换标签，方向键选择记录，Enter 打开，Esc 返回，`r` 刷新。
 - SQLite 保存项目、执行、账本版本、回报去重和修改记录。关闭窗口、结束 Worker 或重启 Main 不会清空项目。
 - **项目归属机器**：账本、pm.md、产物、Main 和 Workers 都留在项目所在机器。桌面侧栏通过 Herdr 已有机器连接读取，不复制或同步另一份账本。
 - **PM 绑定与交接**：右键左侧 Agent → 设置 / 重新绑定 PM，选择或创建项目，也可确认重新绑定现有 PM。保留 Main 身份与项目记录，旧 PM 凭据失效。目标机器缺少对应项目运行程序时，设置流程自动准备或升级。
-- **PM Skill 与 SubAgent 配置**：完整读取内置或自定义 Project Manager Skill 及引用文件；在设置中选择 SubAgent 的 Coding 工具和模型，后续派发自动使用。
+- **PM 引导配置**：指定 PM 后激活 `herdr-spaces-setup`，由该 PM 询问是否开始。用户同意后检查环境、推荐团队、确认方案并验证；暂缓和交接保留答案与草案。
+- **持续协调**：结构化回报与持久收件箱同事务保存；项目机器上的普通后台服务负责通知和检查点，PM 明确确认接收与处理。消息送达不等于任务完成。
+- **角色团队**：开发 / 研究 / 混合模板，支持 Pi、Claude Code、Codex、OpenCode 和 Feynman；可选 Coding Hub 路由。写任务默认 worktree 隔离，研究输出保存在持久目录。
 - 基础功能无需后端 Hooks。启动指令交代维护协议，Main 显式调用项目 CLI；自动压缩/恢复注入可另行适配。
 
 ## 安装
 
-项目机器需要 Linux 或 macOS、Python 3.10+ 和 `hc`；桌面机器还需要支持远程 `exec({on})` 的 Herdr App。验证版本为 Herdr App 0.1.14 / hc 0.1.19。运行没有 pip/npm 依赖；Node 仅用于开发测试。Worker 使用项目 cwd；不自动创建 worktree，也未接入 Coding Hub 的完整路由与调度。
+项目机器需要 Linux 或 macOS、Python 3.10+ 和 `hc`；桌面机器还需要支持远程 `exec({on})` 的 Herdr App。验证版本为 Herdr App 0.1.14 / hc 0.1.19。运行没有 pip/npm 依赖；Node 仅用于开发测试。新团队配置支持 Worker worktree 隔离和 Coding Hub 角色/路由预设；旧项目保持原 cwd 配置并限制同目录单写手。真实模型与研究检索能力须按目标机器验证。
 
 ```sh
 git clone https://github.com/DylanLIiii/herdr-spaces.git
@@ -41,12 +43,13 @@ herdr-app do layout.switch '{"name":"projects"}'
 
 1. 在 Herdr 中打开项目机器上的 Agent，继续使用它的原生终端。
 2. 右键左侧 Agent，选择 **设置 / 重新绑定 PM…**；也可以点击 Project 空状态中的 **设置项目 PM…**。已有项目可从侧栏标题旁的 **PM 配置** 进入。
-3. 按窗口中的三个分组选择项目、PM 工作指南和 SubAgent 默认配置。目录默认取当前终端的位置，Skill 默认使用内置指南；选“自定义 Skill”后填写绝对路径。
-4. 点击 **绑定 PM 并发送说明**。绑定沿用当前终端，不创建第二个 Agent。空闲 Agent 会收到一条项目说明；正在工作或等待确认时，先保存绑定，之后再点击“交代项目”。
+3. 选择或创建项目，确认名称、目标和目录。PM 默认使用内置指南；高级设置可选自定义 Skill。
+4. 点击 **绑定 PM 并交代配置**。沿用当前终端；空闲 PM 收到配置 Skill 指引，忙碌时先保留绑定，之后再交代项目。
+5. **由指定 PM 询问是否开始配置。** 用户同意后，PM 参考可用工具和 Coding Hub 推荐角色、模型、成果位置与跟进方式；确认具体方案后应用并验证。选择稍后可继续原工作，随后在同一 PM 中继续配置。
 
 目标机器尚未安装项目运行程序时，这个设置动作会从本机安装包自动准备它；无需在服务器手动克隆仓库或输入安装命令。它使用现有 Herdr 连接，不联网下载代码、不复制账本、不修改 Agent 配置。左侧会显示 Leader 标记。
 
-一个项目已有活跃 PM 时，界面提供进入原终端或“重新绑定到此终端…”。明确确认后切换 PM，旧终端与已有 Workers 继续运行；接任 PM 会收到完整 Skill 的读取指引。详细行为、权限边界和旧版升级见 [PM 设置说明](docs/onboarding.md)。
+一个项目已有活跃 PM 时，界面提供进入原终端或“重新绑定到此终端…”。明确确认后切换 PM，旧终端与已有 Workers 继续运行；接任 PM 会收到完整 Skill 的读取指引。完整配置步骤、角色派发、服务恢复与研究包格式见 [PM 协调与研究成果指南](docs/coordination-guide.md)；绑定与交接的底层机制见 [PM 设置说明](docs/onboarding.md)。
 
 ## 项目在远端服务器
 
@@ -79,7 +82,7 @@ herdr-project create my-project \
 herdr-project start --project my-project --backend pi
 ```
 
-支持 `--backend pi|claude|codex`，将启动上下文作为程序的初始 prompt 参数。是否实际接受该参数应在目标程序版本确认。也可显式传入自己的启动或恢复参数：
+支持 `--backend pi|claude|codex|opencode|feynman`，通过对应适配器传递初始上下文。是否实际接受该参数应在目标程序版本确认。也可显式传入自己的启动或恢复参数：
 
 ```sh
 herdr-project start --project my-project \
@@ -98,7 +101,7 @@ herdr-project start --project my-project \
 
 Main 启动时获得当前项目、Main 身份、会话代次、完整 PM Skill 的读取入口及 CLI 协议。通过 `skill --project PROJECT` 读取 Skill 原文，`skill --list` 列出资源，`skill --resource RELATIVE_PATH` 完整读取引用文件（这些命令都需要 `--project PROJECT`）。每次业务变化：读取记录，写入一个 JSON 请求，然后使用已读版本提交。
 
-`worker` 未显式指定工具和模型时，使用项目保存的 SubAgent 配置；`--backend pi|claude|codex` 和 `--model MODEL` 可单次覆盖。模型留空使用 Coding 工具默认值，工具安装、登录及权限仍由其自身配置管理。
+`worker --role worker|explore|librarian|reviewer|research|oracle` 使用项目角色配置，旧项目回退到原 SubAgent 默认值；`--backend`、`--model` 和 `--tier` 可单次覆盖。Research 使用 Feynman `deepresearch` 或带确认 benchmark 契约的 `autoresearch`。工具安装、登录及权限仍由其自身配置管理。
 
 ```sh
 herdr-project show --project my-project
@@ -127,7 +130,9 @@ Main 将 todo 提升为 task 后，可在已有授权范围内派发 Worker：
 herdr-project worker --project my-project --item work-001 --revision CURRENT --backend pi
 ```
 
-Worker 自动获得范围与验收标准，通过 `report --file` 提交进展/产物；它不能验收。Main 先使用 `artifact.review` 核验证据，再以 `item.status` 进入 accepted。要求 evidenceRefs 引用本任务已采纳且内容未变的文件。此检查确认引用和完整性，不能替代判断证据是否足以证明结果。
+Worker 自动获得角色、范围、验收标准、锁定配置和输入产物版本，通过 `report --file` 提交进展、问题或产物；它不能验收。Main 通过 `inbox` 跟进，先 `inbox.acknowledge`，完成协调后 `inbox.handle`。任务验收先 `artifact.review`，再 `item.status accepted` 并引用本任务已核验且内容未变的 evidenceRefs。
+
+研究包发布到独立持久目录，保留计划、草稿、来源、brief 和 provenance。`artifact.disposition` 记录采用 / 暂缓 / 不采用，`artifact.followup` 创建关联成果版本的待办；核验报告不等于采用建议。完整格式见 [产物发布](docs/coordination-guide.md#研究产物发布)。
 
 ## 恢复与排障
 
@@ -149,6 +154,7 @@ herdr-project reconcile --project my-project
 ```sh
 npm run check
 npm test
+python3 scripts/workflow_smoke.py --app /absolute/path/to/herdr-app
 python3 scripts/native_smoke.py --app /absolute/path/to/herdr-app
 ```
 
@@ -158,7 +164,9 @@ python3 scripts/native_smoke.py --app /absolute/path/to/herdr-app
 
 `python3 scripts/remote_smoke.py --app /absolute/path/to/herdr-app` 使用三个隔离 Core，通过真实 `hc machine --via` 连接验证两个客户端读取同一远端账本、原生导航和断线重连。它在同一台测试主机模拟机器边界，不替代真实 SSH / macOS 部署验证。
 
-运行程序与安装器均包含在本仓库中。使用 `python3 scripts/package.py` 可生成 `dist/herdr-spaces-0.3.1.tar.gz` 安装归档。
+`workflow_smoke.py` 使用独立 Core、账本和确定性 PM/Research 程序验证配置、后台服务重启、交接、产物核验及后续任务；可在 macOS / Linux 运行，带 `--app` 时检查真实原生窗口，Linux 需要 Xvfb。它不调用模型。
+
+运行程序与安装器均包含在本仓库中。使用 `python3 scripts/package.py` 可生成 `dist/herdr-spaces-0.4.0.tar.gz` 安装归档。0.4.0 使用 SQLite schema 2，旧运行程序会拒绝打开升级后的库；升级前用 SQLite backup API 保存备份，保留数据路径，先安装独立预览布局。远端设置会按能力探测准备新版本。
 
 ## 许可
 
