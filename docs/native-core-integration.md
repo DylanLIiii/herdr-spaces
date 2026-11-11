@@ -1,4 +1,4 @@
-# Native Core integration (0.4.2)
+# Native Core integration (0.4.3)
 
 ## Responsibility and observed defect
 
@@ -50,3 +50,9 @@ Every new writing Worker requires an isolated Git worktree. Old project-cwd pref
 The OpenCode event subscription clears OSC status on normal exhaustion, failure and teardown. Late snapshots cannot revive a closed subscription. Four setup-level lifecycle tests reproduce the original failures and verify the correction.
 
 `production_mini_smoke.py` runs the exact production manager/start/_run/standalone-mini chain against a loopback deterministic HTTP model. It observes Core parent linkage and working/done/error transitions; no paid provider receives requests. Permission/question mappings remain covered by native-event tests rather than claimed as end-to-end model interaction. See `docs/native-core-audit/production-mini.json`. Original v0.4.0 parent failure and status lifecycle failure logs are retained in that directory. Actual ts-mini before/after snapshots are allowlisted, retaining identities, Run/report ids, artifact ids and Core states without credentials or prompts.
+
+## Snapshot recovery in 0.4.3
+
+Absent or invalid activity timestamps no longer imply idle. A snapshot needs actual activity/completion evidence; otherwise the adapter clears status. During bootstrap it buffers native state/blocker events, independently loads session and permission snapshots, and replays the buffered events before emitting any safe input state. Thus a busy event cannot discard an existing permission wait, and a reply arriving during the snapshot removes that stale permission. If permission inspection fails, an existing session cannot be advertised idle/working; an explicit newly-created session event can establish a fresh event-only session. Buffering is bounded and closes the observer if exceeded. Stream end/failure still clears and fences late snapshots.
+
+`tests/native-status-recovery.test.js` covers missing/invalid timestamps, concurrent busy + pending permission, replied permission versus stale snapshot, question versus idle snapshot, failed inspection and fresh session creation. Before/after evidence is under `docs/native-core-audit/recovery-*.txt`. The exact production launch is rechecked against the deterministic loopback model in `production-mini-recovery.json`; it does not imply live-model research or exhaustive backend support.

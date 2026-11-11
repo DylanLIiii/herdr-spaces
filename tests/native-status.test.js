@@ -5,8 +5,8 @@ import {tracker,frame} from '../herdr_projects/integrations/opencode-status/inde
 test('only scoped native events change status; tokens and tool progress do not invent it',()=>{
  const s=tracker('ses_root');
  assert.equal(s.current(),null);
- assert.equal(s.apply({type:'session.execution.started',data:{sessionID:'other'}}),null);
- assert.equal(s.apply({type:'session.message.delta',data:{sessionID:'ses_root',text:'working'}}),null);
+ assert.equal(s.apply({type:'session.execution.started',data:{sessionID:'other'}}),undefined);
+ assert.equal(s.apply({type:'session.message.delta',data:{sessionID:'ses_root',text:'working'}}),undefined);
  assert.deepEqual(s.apply({type:'session.status',data:{sessionID:'ses_root',status:{type:'busy'}}}),{state:'working'});
  assert.deepEqual(s.apply({type:'permission.asked',data:{sessionID:'ses_root',id:'p1'}}),{state:'blocked',kind:'permission'});
  assert.deepEqual(s.apply({type:'session.status',data:{sessionID:'ses_root',status:{type:'busy'}}}),{state:'blocked',kind:'permission'});

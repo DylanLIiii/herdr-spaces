@@ -1,0 +1,44 @@
+{
+  "passed": true,
+  "productionCommand": [
+    "opencode",
+    "--standalone",
+    "mini",
+    "--model",
+    "openai/spaces-fixture",
+    "--prompt",
+    "{context}"
+  ],
+  "through": "manager.worker_command -> runtime.start -> _run -> native_agents.environment -> OpenCode --standalone mini",
+  "parent": "t1",
+  "terminal": "t2",
+  "observed": [
+    null,
+    "working",
+    "done",
+    "error"
+  ],
+  "modelRequests": [
+    {
+      "path": "/v1/responses",
+      "model": "gpt-6-luna",
+      "stream": true,
+      "error": false
+    },
+    {
+      "path": "/v1/responses",
+      "model": "spaces-fixture",
+      "stream": true,
+      "error": false
+    },
+    {
+      "path": "/v1/responses",
+      "model": "spaces-fixture",
+      "stream": true,
+      "error": true
+    }
+  ],
+  "paidModelCalls": 0,
+  "localDeterministicHTTP": true,
+  "scratch": "/private/tmp/hps-production-ck92wugh"
+}

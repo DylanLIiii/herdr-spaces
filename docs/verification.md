@@ -1,5 +1,12 @@
 # 验证记录
 
+## 0.4.3 状态恢复复核
+
+- 修复缺少/无效时间戳误报idle，以及活动事件覆盖权限快照的问题。先缓冲原生事件，独立取得会话与权限快照，再重放期间事件；权限已回复不会复活，权限读取失败不能广告为可安全输入，解决阻塞但活动未知时清除状态。
+- 七项恢复场景测试（其中四项先失败）与前次四项生命周期测试通过；完整98 Python + 48 JS测试通过。证据：[before](native-core-audit/recovery-before.txt)、[after](native-core-audit/recovery-after.txt)。
+- [生产命令复核](native-core-audit/production-mini-recovery.json)再次通过真实standalone mini启动链路，观测working/done/error；模型和标题请求都在本地fixture，付费调用0。
+- [真实ts-mini项目](native-core-audit/ts-mini-recovery-after.json)及[安装回执](native-core-audit/recovery-installations.json)确认本机/ts-mini升级0.4.3、身份历史保持、Agent重启0，已安装文件哈希与源码一致。
+
 ## 0.4.2 审计返工验收
 
 - 所有新写任务强制 worktree 隔离，旧配置仅在下次派发时解析为隔离，不改现有 Run；底层启动与目录准备同样拒绝 project-cwd 写入。

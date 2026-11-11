@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.3
+
+- Keep missing/invalid native snapshot activity unknown instead of synthesizing idle.
+- Merge permission snapshots and concurrent native events before publishing status; pending permissions cannot be skipped, replied permissions cannot be resurrected, and failed inspection cannot advertise safe input.
+- Add seven recovery regressions and recheck the exact standalone-mini production launch with a loopback deterministic model.
+
 ## 0.4.2
 
 - Require an isolated worktree for every new writing Worker, including legacy preferences and lower-level launch calls; existing executions remain unchanged.

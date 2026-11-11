@@ -1,0 +1,94 @@
+TAP version 13
+# Subtest: normal stream exhaustion clears a previously emitted working status
+ok 1 - normal stream exhaustion clears a previously emitted working status
+  ---
+  duration_ms: 4.41275
+  type: 'test'
+  ...
+# Subtest: late snapshot cannot revive closed subscription
+ok 2 - late snapshot cannot revive closed subscription
+  ---
+  duration_ms: 2.161
+  type: 'test'
+  ...
+# Subtest: late snapshot cannot revive failed subscription
+ok 3 - late snapshot cannot revive failed subscription
+  ---
+  duration_ms: 1.520917
+  type: 'test'
+  ...
+# Subtest: synchronous subscribe failure clears and releases the adapter
+ok 4 - synchronous subscribe failure clears and releases the adapter
+  ---
+  duration_ms: 0.877667
+  type: 'test'
+  ...
+# Subtest: missing or invalid snapshot timestamps do not imply idle
+ok 5 - missing or invalid snapshot timestamps do not imply idle
+  ---
+  duration_ms: 0.8325
+  type: 'test'
+  ...
+# Subtest: busy event cannot skip an existing permission snapshot or expose premature working
+ok 6 - busy event cannot skip an existing permission snapshot or expose premature working
+  ---
+  duration_ms: 4.336166
+  type: 'test'
+  ...
+# Subtest: reply during snapshot removes the stale permission rather than resurrecting it
+ok 7 - reply during snapshot removes the stale permission rather than resurrecting it
+  ---
+  duration_ms: 1.43925
+  type: 'test'
+  ...
+# Subtest: question arriving during snapshot is retained over an idle snapshot
+ok 8 - question arriving during snapshot is retained over an idle snapshot
+  ---
+  duration_ms: 1.47225
+  type: 'test'
+  ...
+# Subtest: failed permission inspection cannot publish an apparently safe existing-session state
+ok 9 - failed permission inspection cannot publish an apparently safe existing-session state
+  ---
+  duration_ms: 1.425875
+  type: 'test'
+  ...
+# Subtest: new session creation after a missing snapshot resumes event reporting without guessed idle
+ok 10 - new session creation after a missing snapshot resumes event reporting without guessed idle
+  ---
+  duration_ms: 1.486667
+  type: 'test'
+  ...
+# Subtest: resolved blocker with unknown activity clears status and unrelated events do not overwrite it
+ok 11 - resolved blocker with unknown activity clears status and unrelated events do not overwrite it
+  ---
+  duration_ms: 1.574417
+  type: 'test'
+  ...
+# Subtest: only scoped native events change status; tokens and tool progress do not invent it
+ok 12 - only scoped native events change status; tokens and tool progress do not invent it
+  ---
+  duration_ms: 1.699875
+  type: 'test'
+  ...
+# Subtest: native descendant activity and questions are reflected without other-session leakage
+ok 13 - native descendant activity and questions are reflected without other-session leakage
+  ---
+  duration_ms: 0.293209
+  type: 'test'
+  ...
+# Subtest: recovery seeds from actual execution timestamps, not process existence
+ok 14 - recovery seeds from actual execution timestamps, not process existence
+  ---
+  duration_ms: 0.131375
+  type: 'test'
+  ...
+1..14
+# tests 14
+# suites 0
+# pass 14
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 59.214208

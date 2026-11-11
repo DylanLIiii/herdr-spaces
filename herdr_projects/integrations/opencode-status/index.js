@@ -8,7 +8,7 @@ export function tracker(root) {
     const data=event.data||{},id=data.sessionID||data.form?.sessionID;
     if(event.type==='session.created'&&sessions.has(data.parentID)&&!sessions.has(id))sessions.set(id,{state:'idle',permissions:new Set(),forms:new Set()});
     const session=sessions.get(id);
-    if(!session)return null;
+    if(!session)return undefined;
     switch(event.type){
       case 'session.created': session.state='idle';break;
       case 'session.status':
@@ -23,7 +23,7 @@ export function tracker(root) {
       case 'permission.replied':session.permissions.delete(data.requestID);break;
       case 'form.created':session.forms.add(data.form.id);break;
       case 'form.replied':case 'form.cancelled':session.forms.delete(data.id);break;
-      default:return null;
+      default:return undefined;
     }
     return current();
   }
@@ -37,8 +37,14 @@ export function tracker(root) {
   }
   function seed(info){
     if(!sessions.has(info.id))return;
-    const busy=Date.parse(info.time?.busy)||Number(info.time?.busy)||0,idle=Date.parse(info.time?.idle)||Number(info.time?.idle)||0;
-    sessions.get(info.id).state=busy>idle?'working':info.outcome==='failed'?'error':'idle';
+    const timestamp=value=>{
+      if(value===null||value===undefined||value==='')return null;
+      const n=typeof value==='number'?value:typeof value==='string'?(Number(value)||Date.parse(value)):NaN;
+      return Number.isFinite(n)&&n>0?n:null;
+    };
+    const busy=timestamp(info.time?.busy),idle=timestamp(info.time?.idle);
+    sessions.get(info.id).state=busy!==null&&(idle===null||busy>idle)?'working':
+      info.outcome==='failed'?'error':idle!==null?'idle':null;
     return current();
   }
   return {apply,seed,current};
@@ -59,26 +65,50 @@ export default {
     const send=status=>{const output=frame(status);if(!closed&&output&&output!==last){writeSync(fd,output);last=output;}};
     const cleanup=()=>{if(closed)return;try{send({state:'clear'});}finally{closed=true;abort.abort();closeSync(fd);}};
     const endStream=()=>{streamEnded=true;cleanup();};
-    // Subscribe before reading a snapshot; if an event wins, do not overwrite it
-    // with older state from the snapshot request.
-    let events=0;
+    // Buffer until both snapshots finish: an activity event must not cause a
+    // permission snapshot to be discarded, nor publish a briefly unsafe state.
+    // Replay then wins over stale snapshot entries (e.g. a permission replied
+    // while permission.list was running). No model tokens are retained here.
+    let initializing=true,verified=false;
+    const buffered=[];
+    const accepted=/^(session\.(created|status|execution\.(started|succeeded|failed|interrupted)|step\.started|idle)|permission\.(asked|replied)|form\.(created|replied|cancelled))$/;
+    const applyEvent=event=>{
+      if(event.type==='session.created'&&event.data?.sessionID===root)verified=true;
+      return state.apply(event);
+    };
+    const publish=status=>{if(verified)send(status||{state:'clear'});else if(status?.state==='blocked')send(status);else send({state:'clear'});};
     const running=(async()=>{
       try{
         const stream=ctx.event.subscribe({signal:abort.signal});
-        for await(const event of stream){if(closed)break;const status=state.apply(event);if(status){events++;send(status);}}
+        for await(const event of stream){
+          if(closed)break;
+          if(!accepted.test(event.type))continue;
+          if(initializing){
+            if(buffered.length>=1000)break; // Fail closed on an unbounded bootstrap.
+            buffered.push(event);
+          }else{const status=applyEvent(event);if(status!==undefined)publish(status);}
+        }
       }catch{/* Loss of observation clears status; it is not an Agent failure. */}
       finally{endStream();}
     })();
     if(streamEnded)return cleanup;
-    try{
-      const info=await ctx.session.get({sessionID:root});
-      const permissions=await ctx.permission.list({sessionID:root});
-      if(!closed&&!streamEnded&&!events){
-        state.seed(info);
-        for(const permission of permissions)state.apply({type:'permission.asked',data:{...permission,sessionID:root}});
-        send(state.current());
+    const [snapshot,permissions]=await Promise.allSettled([
+      Promise.resolve().then(()=>ctx.session.get({sessionID:root},{signal:abort.signal})),
+      Promise.resolve().then(()=>ctx.permission.list({sessionID:root},{signal:abort.signal}))
+    ]);
+    if(!closed&&!streamEnded){
+      verified=snapshot.status==='fulfilled'&&snapshot.value?.id===root&&permissions.status==='fulfilled'&&Array.isArray(permissions.value);
+      if(snapshot.status==='fulfilled'&&snapshot.value?.id===root)state.seed(snapshot.value);
+      if(permissions.status==='fulfilled'&&Array.isArray(permissions.value)){
+        for(const permission of permissions.value){
+          if(permission.id&&(!permission.sessionID||permission.sessionID===root))
+            state.apply({type:'permission.asked',data:{...permission,sessionID:root}});
+        }
       }
-    }catch{/* A fresh named session is created by the first prompt. Wait for its event. */}
+      for(const event of buffered)applyEvent(event);
+      initializing=false;buffered.length=0;
+      publish(state.current());
+    }
     void running;
     return cleanup;
   }

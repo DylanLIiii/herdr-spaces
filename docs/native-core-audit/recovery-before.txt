@@ -1,0 +1,120 @@
+TAP version 13
+# Subtest: missing or invalid snapshot timestamps do not imply idle
+not ok 1 - missing or invalid snapshot timestamps do not imply idle
+  ---
+  duration_ms: 0.998542
+  type: 'test'
+  location: '/Users/dylan/repo/herdr-spaces/tests/native-status-recovery.test.js:22:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + {
+    +   state: 'idle'
+    + }
+    - null
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: ~
+  actual:
+    state: 'idle'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///Users/dylan/repo/herdr-spaces/tests/native-status-recovery.test.js:24:38)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.start (node:internal/test_runner/test:944:17)
+    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)
+  ...
+# Subtest: busy event cannot skip an existing permission snapshot or expose premature working
+not ok 2 - busy event cannot skip an existing permission snapshot or expose premature working
+  ---
+  duration_ms: 4.39775
+  type: 'test'
+  location: '/Users/dylan/repo/herdr-spaces/tests/native-status-recovery.test.js:30:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input was expected to not match the regular expression /state=working/. Input:
+    
+    '\x1B]7501;app=opencode:state=working\x1B\\'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual: '\x1B]7501;app=opencode:state=working\x1B\\'
+  operator: 'doesNotMatch'
+  stack: |-
+    file:///Users/dylan/repo/herdr-spaces/tests/native-status-recovery.test.js:34:9
+    async fixture (file:///Users/dylan/repo/herdr-spaces/tests/native-status-recovery.test.js:18:6)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: reply during snapshot removes the stale permission rather than resurrecting it
+not ok 3 - reply during snapshot removes the stale permission rather than resurrecting it
+  ---
+  duration_ms: 5.121583
+  type: 'test'
+  location: '/Users/dylan/repo/herdr-spaces/tests/native-status-recovery.test.js:41:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    The expression evaluated to a falsy value:
+    
+      assert.ok(f.output().endsWith('state=working\x1b\\'))
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    file:///Users/dylan/repo/herdr-spaces/tests/native-status-recovery.test.js:46:9
+    async fixture (file:///Users/dylan/repo/herdr-spaces/tests/native-status-recovery.test.js:18:6)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: question arriving during snapshot is retained over an idle snapshot
+ok 4 - question arriving during snapshot is retained over an idle snapshot
+  ---
+  duration_ms: 1.821333
+  type: 'test'
+  ...
+# Subtest: failed permission inspection cannot publish an apparently safe existing-session state
+not ok 5 - failed permission inspection cannot publish an apparently safe existing-session state
+  ---
+  duration_ms: 1.253834
+  type: 'test'
+  location: '/Users/dylan/repo/herdr-spaces/tests/native-status-recovery.test.js:57:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input was expected to not match the regular expression /state=working|state=idle/. Input:
+    
+    '\x1B]7501;app=opencode:state=working\x1B\\'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual: '\x1B]7501;app=opencode:state=working\x1B\\'
+  operator: 'doesNotMatch'
+  stack: |-
+    file:///Users/dylan/repo/herdr-spaces/tests/native-status-recovery.test.js:60:9
+    async fixture (file:///Users/dylan/repo/herdr-spaces/tests/native-status-recovery.test.js:18:6)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: new session creation after a missing snapshot resumes event reporting without guessed idle
+ok 6 - new session creation after a missing snapshot resumes event reporting without guessed idle
+  ---
+  duration_ms: 1.156291
+  type: 'test'
+  ...
+1..6
+# tests 6
+# suites 0
+# pass 2
+# fail 4
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 64.293875
