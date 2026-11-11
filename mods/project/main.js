@@ -76,7 +76,7 @@ export default class Project extends View {
     if(this.key!==this.currentKey()){this.refresh(cx);return;}
     const address=this.address(record),live=this.live(record);
     if(!live){this.error='此执行终端已退出或不可访问。项目记录仍保留；请在项目所在机器使用 herdr-project start / reconcile 恢复。';cx.notify();return;}
-    run('agent.focus',{terminal:address});
+    run(record.parentTerminal||live.parent?'terminal.peek':'agent.focus',{terminal:address});
   }
   openFile(id,cx,member=null,offset=0) {
     if(!this.origin||this.key!==this.currentKey()){this.refresh(cx);return;}

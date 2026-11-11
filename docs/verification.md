@@ -1,5 +1,14 @@
 # 验证记录
 
+## 当前安装与最终现场验收：0.4.4
+
+此段是当前结论；下方0.4.3、0.4.2、0.4.1与0.4.0均为历史阶段，不代表当前安装版本。
+
+- 实际项目为 **ts-mini / opencode-antigravity-bridge**，id `project-e9d5e3b56bea4b38`。新Worker `t13` 的Core父终端为 `t1`、原生通知启用，实际程序上报 `working / opencode`。见 [真实项目效果](native-core-audit/opencode-antigravity-actual-effect.json) 及 [实际项目侧栏](native-core-audit/opencode-antigravity-project-panel.png)。这些来自用户正在使用的项目，不是loopback fixture。旧运行仍标为旧版独立终端，保持原进程。
+- 当前布局的子终端导航改用原生 `terminal.peek`，实际打开了t13的原生窗口，宿主状态包含layout overlay且无errors。见 [原生打开记录](native-core-audit/actual-project-peek.json)。PM/独立终端继续用agent.focus。
+- [原生等待端到端](native-core-audit/blocking-mini.json)：生产 manager/start/_run/standalone-mini 链路，确定性本地模型返回真实 shell 和 question 工具调用；OpenCode实际生成权限请求与问题表单，Core分别报告 blocked/permission、blocked/question。没有直接注入伪造事件，没有批准或回答请求，付费调用为0。
+- [当前安装文件清单](native-core-audit/current-installed-inventory.json)逐项核对本机当前3个Spaces模块和运行文件；[目标项目效果](native-core-audit/opencode-antigravity-actual-effect.json)包含远端运行文件哈希。0.4.2/0.4.3回执的updatedMods为空，是因为那些修复只改运行程序，UI仍为0.4.1安装版本且当时与源码一致；本次0.4.4同步了子终端导航改动。
+
 ## 0.4.3 状态恢复复核
 
 - 修复缺少/无效时间戳误报idle，以及活动事件覆盖权限快照的问题。先缓冲原生事件，独立取得会话与权限快照，再重放期间事件；权限已回复不会复活，权限读取失败不能广告为可安全输入，解决阻塞但活动未知时清除状态。

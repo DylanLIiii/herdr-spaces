@@ -1,0 +1,106 @@
+{
+  "passed": true,
+  "through": "manager.worker_command -> runtime.start -> _run -> production standalone mini -> actual OpenCode tools -> native permission/form events -> Core",
+  "evidence": [
+    {
+      "scenario": "permission",
+      "terminal": "t2",
+      "parent": "t1",
+      "status": {
+        "app": "opencode",
+        "kind": "permission",
+        "state": "blocked"
+      },
+      "productionCommand": [
+        "opencode",
+        "--standalone",
+        "mini",
+        "--model",
+        "openai/spaces-fixture",
+        "--prompt",
+        "{context}"
+      ],
+      "tool": "shell"
+    },
+    {
+      "scenario": "question",
+      "terminal": "t3",
+      "parent": "t1",
+      "status": {
+        "app": "opencode",
+        "kind": "question",
+        "state": "blocked"
+      },
+      "productionCommand": [
+        "opencode",
+        "--standalone",
+        "mini",
+        "--model",
+        "openai/spaces-fixture",
+        "--prompt",
+        "{context}"
+      ],
+      "tool": "question"
+    }
+  ],
+  "modelRequests": [
+    {
+      "path": "/v1/responses",
+      "model": "gpt-6-luna",
+      "stream": true,
+      "error": false
+    },
+    {
+      "path": "/v1/responses",
+      "model": "spaces-fixture",
+      "stream": true,
+      "error": false,
+      "availableTools": [
+        "edit",
+        "experimental_image_generate",
+        "glob",
+        "grep",
+        "question",
+        "read",
+        "shell",
+        "skill",
+        "subagent",
+        "webfetch",
+        "websearch",
+        "write",
+        "execute"
+      ]
+    },
+    {
+      "path": "/v1/responses",
+      "model": "gpt-6-luna",
+      "stream": true,
+      "error": false
+    },
+    {
+      "path": "/v1/responses",
+      "model": "spaces-fixture",
+      "stream": true,
+      "error": false,
+      "availableTools": [
+        "edit",
+        "experimental_image_generate",
+        "glob",
+        "grep",
+        "question",
+        "read",
+        "shell",
+        "skill",
+        "subagent",
+        "webfetch",
+        "websearch",
+        "write",
+        "execute"
+      ]
+    }
+  ],
+  "paidModelCalls": 0,
+  "localDeterministicHTTP": true,
+  "scratch": "/private/tmp/hps-production-8fjugcqm",
+  "userInputInjected": false
+}

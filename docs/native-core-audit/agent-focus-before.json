@@ -1,0 +1,44 @@
+{
+  "targetProject": "opencode-antigravity-bridge",
+  "pm": {
+    "zoom": 0.9,
+    "font_size": 12.6,
+    "ui_font_size": 11.7,
+    "space": "ts-mini/sp80d04d7d646bb72ffd1cdf63ed566427",
+    "tab": "ts-mini/tb271cf635489b2c30d7265673571ab2ed",
+    "focused_pane": "ts-mini/pf900d8b06d79517132f3e9d20cd8085a",
+    "layout": "sulan-tools",
+    "agent": "ts-mini/t1",
+    "floats": {},
+    "overlays": [],
+    "errors": []
+  },
+  "childNavigation": {
+    "zoom": 0.9,
+    "font_size": 12.6,
+    "ui_font_size": 11.7,
+    "space": "ts-mini/sp80d04d7d646bb72ffd1cdf63ed566427",
+    "tab": "ts-mini/tb271cf635489b2c30d7265673571ab2ed",
+    "focused_pane": "ts-mini/pf900d8b06d79517132f3e9d20cd8085a",
+    "layout": "sulan-tools",
+    "agent": "ts-mini/t1",
+    "floats": {},
+    "overlays": [],
+    "errors": []
+  },
+  "parentTerminal": "ts-mini/t1",
+  "childTerminal": "ts-mini/t13",
+  "settledChildNavigation": {
+    "zoom": 0.9,
+    "font_size": 12.6,
+    "ui_font_size": 11.7,
+    "space": "sp2c0e7442a2f3a291df5d212e2e007a13",
+    "tab": "tbb45427863b098240ae44bc60d3179921",
+    "focused_pane": "pcd093ac38f6d445f781bf97be722db21",
+    "layout": "sulan-tools",
+    "agent": "t6",
+    "floats": {},
+    "overlays": [],
+    "errors": []
+  }
+}

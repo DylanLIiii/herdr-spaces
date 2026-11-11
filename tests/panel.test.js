@@ -201,10 +201,10 @@ test('artifact filters and asynchronous full-text search preserve current projec
 });
 
 test('current sessions use native agent navigation and prior attempts are collapsed',async()=>{
- const h=await host();const p=fixture('a');p.runs.push({id:'old',workItemId:'task',state:'exited',terminal:'a-old'});
+ const h=await host();const p=fixture('a');p.runs[0].parentTerminal='a-main';p.runs.push({id:'old',workItemId:'task',state:'exited',terminal:'a-old'});
  await h.respond(p);h.view.tab='sessions';h.state.live=[{address:'a-worker',status:null}];
  let root=h.view.render(h.cx);assert.ok(find(root,'session-run'));assert.equal(find(root,'session-old'),null);assert.match(allText(root),/未上报状态/);
- find(root,'session-run').events.click({},h.cx);assert.equal(h.state.calls.at(-1).name,'agent.focus');
+ find(root,'session-run').events.click({},h.cx);assert.equal(h.state.calls.at(-1).name,'terminal.peek');
  find(root,'session-history').events.click({},h.cx);assert.ok(find(h.view.render(h.cx),'session-old'));h.view.close();
 });
 

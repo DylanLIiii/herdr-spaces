@@ -18,7 +18,7 @@ def main():
     output.parent.mkdir(parents=True, exist_ok=True)
     paths = [ROOT / name for name in ('README.md', 'CHANGELOG.md', 'LICENSE', 'THIRD-PARTY-NOTICES.md', 'package.json', 'project.py', '.gitignore')]
     for folder, extensions in [('herdr_projects', {'.py', '.md', '.js', '.json'}), ('scripts', {'.py'}), ('tests', {'.py', '.js'}),
-                               ('mods', {'.js', '.json', '.svg'}), ('layouts', {'.json'}), ('docs', {'.md', '.png', '.json', '.herdr-app'})]:
+                               ('mods', {'.js', '.json', '.svg'}), ('layouts', {'.json'}), ('docs', {'.md', '.txt', '.png', '.json', '.herdr-app'})]:
         paths.extend(p for p in (ROOT / folder).rglob('*') if p.is_file() and p.suffix in extensions and '__pycache__' not in p.parts and p.name != 'jsconfig.json')
     paths = sorted(set(paths))
     with output.open('wb') as stream, gzip.GzipFile(filename='', mode='wb', fileobj=stream, mtime=0) as compressed, tarfile.open(fileobj=compressed, mode='w') as archive:

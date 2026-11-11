@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.4
+
+- Open Core child terminals through the native terminal peek in the current layout; keep agent focus for independent/PM sessions.
+- Verify actual ts-mini/opencode-antigravity-bridge parent/status/navigation and inventory installed files explicitly.
+- Verify real OpenCode shell permission and question form blockers through the production mini chain with a loopback deterministic model and no approvals or paid calls.
+
 ## 0.4.3
 
 - Keep missing/invalid native snapshot activity unknown instead of synthesizing idle.

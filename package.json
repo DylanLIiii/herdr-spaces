@@ -1,6 +1,6 @@
 {
   "name": "herdr-spaces",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "description": "Native Herdr project sidebar with a persistent task ledger and one Main agent per project",
   "license": "MIT",
   "repository": {

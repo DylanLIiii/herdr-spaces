@@ -1,0 +1,187 @@
+{
+  "id": "project-e9d5e3b56bea4b38",
+  "name": "opencode-antigravity-bridge",
+  "cwd": "/Users/dylanli/repo/opencode-antigravity-bridge",
+  "version": "0.4.4",
+  "main": {
+    "id": "main-e9ad16a1ee0e4a65",
+    "terminal": "t1",
+    "scope": "core:b215daa3a22fb5a412092c0d8fa64864",
+    "generation": 1
+  },
+  "runs": [
+    {
+      "runId": "run-abae3e4ba427402e",
+      "terminal": "t6",
+      "state": "exited",
+      "parentTerminal": null,
+      "core": {
+        "parent": null,
+        "notify": false,
+        "state": "finished",
+        "reported": false,
+        "pid": 56244,
+        "created_ms": 1794392202196
+      },
+      "status": {
+        "state": null,
+        "app": null,
+        "kind": null
+      }
+    },
+    {
+      "runId": "run-7570f11ef180495e",
+      "terminal": "t7",
+      "state": "running",
+      "parentTerminal": null,
+      "core": {
+        "parent": null,
+        "notify": false,
+        "state": "live",
+        "reported": false,
+        "pid": 57089,
+        "created_ms": 1794392302925
+      },
+      "status": {
+        "state": null,
+        "app": null,
+        "kind": null
+      }
+    },
+    {
+      "runId": "run-f4ef5dcae79f487f",
+      "terminal": "t8",
+      "state": "exited",
+      "parentTerminal": null,
+      "core": {
+        "parent": null,
+        "notify": false,
+        "state": "finished",
+        "reported": false,
+        "pid": 57187,
+        "created_ms": 1794392312211
+      },
+      "status": {
+        "state": null,
+        "app": null,
+        "kind": null
+      }
+    },
+    {
+      "runId": "run-2be6976ad3704340",
+      "terminal": "t9",
+      "state": "exited",
+      "parentTerminal": null,
+      "core": {
+        "parent": null,
+        "notify": false,
+        "state": "finished",
+        "reported": false,
+        "pid": 57204,
+        "created_ms": 1794392312435
+      },
+      "status": {
+        "state": null,
+        "app": null,
+        "kind": null
+      }
+    },
+    {
+      "runId": "run-3a3df75bb5494ca5",
+      "terminal": "t10",
+      "state": "running",
+      "parentTerminal": null,
+      "core": {
+        "parent": null,
+        "notify": false,
+        "state": "live",
+        "reported": false,
+        "pid": 57220,
+        "created_ms": 1794392312671
+      },
+      "status": {
+        "state": null,
+        "app": null,
+        "kind": null
+      }
+    },
+    {
+      "runId": "run-25013d90f3954cd0",
+      "terminal": "t11",
+      "state": "exited",
+      "parentTerminal": null,
+      "core": {
+        "parent": null,
+        "notify": false,
+        "state": "finished",
+        "reported": false,
+        "pid": 71739,
+        "created_ms": 1794393977926
+      },
+      "status": {
+        "state": null,
+        "app": null,
+        "kind": null
+      }
+    },
+    {
+      "runId": "run-4dc4622f63c847e2",
+      "terminal": "t12",
+      "state": "running",
+      "parentTerminal": null,
+      "core": {
+        "parent": null,
+        "notify": false,
+        "state": "live",
+        "reported": false,
+        "pid": 75031,
+        "created_ms": 1794394382893
+      },
+      "status": {
+        "state": null,
+        "app": null,
+        "kind": null
+      }
+    },
+    {
+      "runId": "run-e256ea38c5ae48e7",
+      "terminal": "t13",
+      "state": "running",
+      "parentTerminal": "t1",
+      "core": {
+        "parent": "t1",
+        "notify": true,
+        "state": "live",
+        "reported": true,
+        "pid": 81136,
+        "created_ms": 1794408101936
+      },
+      "status": {
+        "state": "working",
+        "app": "opencode",
+        "kind": null
+      }
+    }
+  ],
+  "runtimeFiles": {
+    "herdr_projects/store.py": "d37573ccf22e30b043d543949c08225b99b7365d5e4402d169a157c8c219c4b8",
+    "herdr_projects/onboarding.py": "a26ddb0c35a046f2b21c28e131ff7fefb61630b5aee236a8a0d5fedcab01a569",
+    "herdr_projects/native_agents.py": "45c50636fff104ec74e4b6835477cf76129f7ab49a46ef344905274ae1d1f5fa",
+    "herdr_projects/teams.py": "f236ac5234915443557c4384f1e74d3d6ad1fd73d9081ac50a99ac9d2f937278",
+    "herdr_projects/__init__.py": "022756873e064f9cd35e5bf0807223f4defeda872f8184d69bd4778914278443",
+    "herdr_projects/runtime.py": "21fed93356fe9e1e2e1c4bdff59cfe024839ab81cbf214de76888404ca37b8a1",
+    "herdr_projects/cli.py": "dcbccbad11d17c74dfd5c93e806c61817fb93e33a71959ff726b746cd9e0576b",
+    "herdr_projects/collaboration.py": "9a83e8a9878383d0d38e514d44da26da75526451b2ab5dc537c3f98e05814224",
+    "herdr_projects/artifacts.py": "aa5ebcca5300a83f7e4b5c2995fd72c359abe5ef2ec5d4fc47742fe48007dfaf",
+    "herdr_projects/setup_flow.py": "2cfb5f70106389dd69182d65e0b5337c8211a90601b765a3e0555cc6f01bbebe",
+    "herdr_projects/coordination.py": "9b20992bb5907067da95a7c432bb1ef0c3d7379b20a804616cbc116d0e9dfd9c",
+    "herdr_projects/manager.py": "d4302123ff0676f008cc998bcde2349bdc4999b65f4a2a912c83d7da51b6b3db",
+    "herdr_projects/schema.py": "c4270e8d529afe2def3ec0c90843c52d2cb95ec9dc0aafb662af36f6aeed2db6",
+    "herdr_projects/workspaces.py": "94387e1d09d386e545861b9e9a02c1a73f6863df285530bef08b286bd186db81",
+    "herdr_projects/integrations/opencode-status/index.js": "96e8f6284b34de421b7366fcfdbd031700358be793e946ff5261c1d759261c78",
+    "herdr_projects/integrations/opencode-status/package.json": "23d8e9fd0c09c19cc88d6a5b0be564fad4ae00ffab0355b63372176c9adc94c6",
+    "herdr_projects/skills/project-manager/SKILL.md": "1ad08dffe0ddd666f671e70bd08c3487e7e31037a207c04f8d8bc600ece47363",
+    "herdr_projects/skills/project-manager/references/subagents.md": "352463bc4bf1b1a4eb6ec5b4f944f3fb70f7edafc242da73d9e7592ec0e4389e",
+    "herdr_projects/skills/herdr-spaces-setup/SKILL.md": "5320a91c8b1327b03d16ad0e0d1519cdded61278e569fba7b73547b637f6d634"
+  }
+}

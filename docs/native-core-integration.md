@@ -1,4 +1,4 @@
-# Native Core integration (0.4.3)
+# Native Core integration (0.4.4)
 
 ## Responsibility and observed defect
 
@@ -56,3 +56,13 @@ The OpenCode event subscription clears OSC status on normal exhaustion, failure 
 Absent or invalid activity timestamps no longer imply idle. A snapshot needs actual activity/completion evidence; otherwise the adapter clears status. During bootstrap it buffers native state/blocker events, independently loads session and permission snapshots, and replays the buffered events before emitting any safe input state. Thus a busy event cannot discard an existing permission wait, and a reply arriving during the snapshot removes that stale permission. If permission inspection fails, an existing session cannot be advertised idle/working; an explicit newly-created session event can establish a fresh event-only session. Buffering is bounded and closes the observer if exceeded. Stream end/failure still clears and fences late snapshots.
 
 `tests/native-status-recovery.test.js` covers missing/invalid timestamps, concurrent busy + pending permission, replied permission versus stale snapshot, question versus idle snapshot, failed inspection and fresh session creation. Before/after evidence is under `docs/native-core-audit/recovery-*.txt`. The exact production launch is rechecked against the deterministic loopback model in `production-mini-recovery.json`; it does not imply live-model research or exhaustive backend support.
+
+## Actual project and native blocker acceptance (0.4.4)
+
+The actual deployed target is **ts-mini / opencode-antigravity-bridge**, project `project-e9d5e3b56bea4b38`. Its new Run `run-e256ea38c5ae48e7` executes in `t13`, with Core parent `ts-mini/t1`, native notifications enabled, and observed `working / opencode`. `docs/native-core-audit/opencode-antigravity-actual-effect.json` is collected from this project, not from the loopback fixture. The actual project screenshot shows its name, current execution, parent and truthful legacy status.
+
+The native child is opened with `terminal.peek`, matching Herdr's native Agents-list action. On the current installed layout, `agent.focus` alone did not expose the child; that negative observation is retained in `agent-focus-before.json`, and the successful native overlay is recorded in `actual-project-peek.json` and the cropped child-window header. Independent terminals and the PM keep `agent.focus`.
+
+`blocker_mini_smoke.py` uses the exact production mini chain and sends deterministic loopback model tool calls to **actual OpenCode shell and question tools**. The shell tool creates a real permission request; question creates a real form. Core observes `blocked/kind=permission` and `blocked/kind=question`. Neither event is manually injected, and no approval or answer is supplied. `blocking-mini.json` records these real Agent/tool event outcomes with zero paid calls.
+
+Current installation is 0.4.4. `current-installed-inventory.json` lists every active local Spaces module and runtime file hash; the actual target JSON lists remote runtime hashes. `final-installations.json` records backups and zero Agent restarts. Older 0.4.2/0.4.3 records are explicitly historical; empty updatedMods in those receipts meant runtime-only changes, not a missing UI installation.
