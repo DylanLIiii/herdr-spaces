@@ -1,10 +1,12 @@
 # 数据、身份与恢复
 
+0.4.1 的执行/通信边界与历史兼容见 [原生集成](native-core-integration.md)。Core 父子通知保持启用，默认不强制新 Tab；业务待办由 attention 推导，collaboration 保存关键依据，旧 inbox 只作历史查询。
+
 ## 实现范围
 
 Projects 是一个独立插件工程：Python CLI 保存 SQLite 账本并通过现有 hc CLI 启动程序；原生 GPUI mod 调用只读命令显示记录。Herdr app/core 源码、共享 API、内置布局都未修改。
 
-默认数据目录为 `${XDG_DATA_HOME:-~/.local/share}/herdr-projects`。可用 `HERDR_PROJECTS_HOME` 或 `--home` 指定。表结构版本保存在 SQLite `user_version`，当前为 2；事务迁移保留旧项目、身份、修订与证据。更高版本不会被旧程序静默打开。SQLite 使用 WAL、写事务和唯一约束。备份时使用 SQLite backup API；不要仅复制运行中的主库文件而遗漏 WAL。
+默认数据目录为 `${XDG_DATA_HOME:-~/.local/share}/herdr-projects`。可用 `HERDR_PROJECTS_HOME` 或 `--home` 指定。表结构版本保存在 SQLite `user_version`，当前为 3；事务迁移保留旧项目、身份、修订与证据。更高版本不会被旧程序静默打开。SQLite 使用 WAL、写事务和唯一约束。备份时使用 SQLite backup API；不要仅复制运行中的主库文件而遗漏 WAL。
 
 ## 项目与执行
 

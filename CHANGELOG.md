@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.1
+
+- Launch Workers as real Herdr Core children with native lifecycle notifications; retain explicit outlive-parent behavior for PM handoff and use native Agent navigation.
+- Preserve OpenCode mini and report its actual session/permission/form events through a run-scoped OSC 7501 adapter. Discover the official OpenCode binary when the background PATH omits it.
+- Replace routine PM inbox acknowledgements with business attention and task-linked collaboration records. Deliver directly through hc, support in-scope peer review/feedback, and retain old inbox history without replay.
+- Separate current executions from prior attempts in the native UI; expose collaboration evidence and accurate unreported status.
+- Migrate additively to schema 3 and package the native status adapter. Existing running terminals remain untouched; Core cannot reparent them through a public API.
+
 ## 0.4.0
 
 - Add transactional schema-2 migration and a durable PM inbox with structured reports, explicit acknowledgement/handling, checkpoint events and safe recovery from uncertain PTY sends.

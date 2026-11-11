@@ -43,7 +43,7 @@ export function terminalAddress(record, machine, scopes) {
   return machine?machine+'/'+record.terminal:record.terminal;
 }
 export function sessionStatus(record,live) {
-  if (record.state==='exited') return '执行已退出';
+  if (record.state==='exited'||live?.state==='finished') return '执行已退出';
   if (!live) return record.state==='inactive'?'尚未启动':record.state==='starting'?'正在启动':'无法观测';
-  return ({working:'运行中',blocked:'等待输入',idle:'空闲',done:'本轮结束'})[live.status] || '状态未知';
+  return ({working:'运行中',blocked:'等待输入',idle:'空闲',done:'本轮结束',error:'执行异常'})[live.status] || '未上报状态';
 }

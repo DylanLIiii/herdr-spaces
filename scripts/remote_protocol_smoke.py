@@ -56,7 +56,7 @@ def main():
         discovery=call(['node','--input-type=module','-e',"import {discoverRuntime} from './mods/project/transport.js';process.stdout.write(discoverRuntime)"],base).stdout
         cli=['python3','-c',discovery,'projects']
         probe=json.loads(remote(cli+['probe']).stdout)
-        check('Remote discovery reports schema 2 and guided setup/bundle capabilities',probe['schemaVersion']==2 and {'guided-setup','artifact-bundles'}.issubset(probe['capabilities']))
+        check('Remote discovery reports schema 3 and guided setup/bundle capabilities',probe['schemaVersion']==3 and {'guided-setup','artifact-bundles'}.issubset(probe['capabilities']))
         seed='''import json,sys
 from pathlib import Path
 sys.path.insert(0,sys.argv[1])

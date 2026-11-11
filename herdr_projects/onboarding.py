@@ -25,7 +25,7 @@ def setup(store, address):
                 cwd=cwd, suggestedName=Path(cwd).name if cwd else '', newProjectId=uid('project'),
                 binding=store.snapshot(address, scopes=scopes)['binding'],
                 defaults=manager.settings({}),
-                tools=[dict(id=backend, available=bool(shutil.which(backend))) for backend in manager.BACKENDS],
+                tools=[dict(id=backend, available=bool(manager.executable(backend))) for backend in manager.BACKENDS],
                 projects=[{k: p[k] for k in ('id', 'name', 'goal', 'cwd', 'main', 'setup', 'configuration')} | manager.settings(p) for p in projects])
 
 

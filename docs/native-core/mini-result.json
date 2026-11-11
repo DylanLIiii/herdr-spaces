@@ -1,0 +1,12 @@
+{
+  "passed": true,
+  "parent": "t3",
+  "worker": "t4",
+  "status": {
+    "app": "opencode",
+    "state": "idle"
+  },
+  "root": "/tmp/hp-mini-trb5vxg4",
+  "modelCalls": false,
+  "backend": "OpenCode V2 plugin and mini, real Core"
+}

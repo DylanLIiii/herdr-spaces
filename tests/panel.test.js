@@ -200,6 +200,19 @@ test('artifact filters and asynchronous full-text search preserve current projec
  request.resolve({code:0,stdout:JSON.stringify({artifacts:[p.artifacts[0]]})});await turn();assert.equal(h.view.searchResults,null);assert.equal(h.view.visibleArtifacts(p)[0].id,'a2');h.view.close();
 });
 
+test('current sessions use native agent navigation and prior attempts are collapsed',async()=>{
+ const h=await host();const p=fixture('a');p.runs.push({id:'old',workItemId:'task',state:'exited',terminal:'a-old'});
+ await h.respond(p);h.view.tab='sessions';h.state.live=[{address:'a-worker',status:null}];
+ let root=h.view.render(h.cx);assert.ok(find(root,'session-run'));assert.equal(find(root,'session-old'),null);assert.match(allText(root),/未上报状态/);
+ find(root,'session-run').events.click({},h.cx);assert.equal(h.state.calls.at(-1).name,'agent.focus');
+ find(root,'session-history').events.click({},h.cx);assert.ok(find(h.view.render(h.cx),'session-old'));h.view.close();
+});
+
+test('task collaboration shows author and evidence without inbox handling actions',async()=>{
+ const h=await host();const p=fixture('a');p.collaboration={entries:[{id:'post',work_item_id:'task',authorName:'reviewer · t3',created_at:'2026-11-11T00:00:00Z',body:{text:'Native event evidence'},recipients:['pm'],artifact_refs:['report'],deliveries:[{state:'uncertain'}]}]};
+ await h.respond(p);h.view.detail='task';const root=h.view.render(h.cx);assert.match(allText(root),/Native event evidence/);assert.match(allText(root),/reviewer · t3/);assert.ok(find(root,'post-evidence-post-report'));assert.doesNotMatch(allText(root),/acknowledge|handle/);h.view.close();
+});
+
 test('out-of-order member previews cannot replace a newer selection',async()=>{
  const h=await host();await h.respond(fixture('a'));h.view.openFile('report',h.cx,'brief.md');h.view.openFile('report',h.cx,'provenance.md');
  await h.respond(null,1,{coreScope:'core:local',text:'provenance'});await h.respond(null,0,{coreScope:'core:local',text:'old brief'});assert.equal(h.view.preview.text,'provenance');h.view.close();

@@ -1,6 +1,6 @@
-"""Durable PM inbox and a deterministic, project-machine follow-up service.
+"""Checkpoint scheduling plus read compatibility for the retired PM inbox.
 
-Notifications never constitute acceptance. Uncertain PTY sends are not retried.
+Core owns delivery and lifecycle notifications. No ordinary-message ack protocol.
 """
 from datetime import datetime, timezone
 import hashlib
@@ -75,22 +75,12 @@ def report_fields(request):
 
 
 def enqueue(store, project, kind, body, item_id=None, run_id=None, event_id=None):
-    """Caller owns the transaction. Only unsent ordinary progress coalesces."""
-    event_id = event_id or uid('event')
-    if store.db.execute('SELECT 1 FROM inbox WHERE id=?', (event_id,)).fetchone():
-        return event_id
-    at = now()
-    encoded = json.dumps(body, ensure_ascii=False)
-    notify = kind != 'progress' or bool(body.get('question')) or bool(body.get('waitingOn'))
-    if kind == 'progress' and not notify:
-        pending = store.db.execute("SELECT id FROM inbox WHERE project_id=? AND run_id=? AND kind='progress' AND notify=0 AND state='queued' ORDER BY seq LIMIT 1",
-                                   (project['id'], run_id)).fetchone()
-        if pending:
-            store.db.execute('UPDATE inbox SET body=?,updated_at=? WHERE id=?', (encoded, at, pending['id']))
-            return pending['id']
-    store.db.execute('INSERT INTO inbox(id,project_id,work_item_id,run_id,kind,body,notify,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)',
-                     (event_id, project['id'], item_id, run_id, kind, encoded, int(notify), at, at))
-    return event_id
+    """Compatibility name used by business writes; record once, no inbox state."""
+    from .collaboration import record
+    notify = kind in ('submitted', 'question', 'checkpoint', 'dependency') or bool(body.get('question'))
+    # blocked/error/exit are reported by Core. Task facts remain in reports.
+    return record(store, project, kind, body, item_id, run_id, event_id,
+                  recipients=['pm'] if notify else [], author='checkpoint-service' if kind=='checkpoint' else None)
 
 
 def inbox(store, project_id, after=0, include_handled=False, limit=100):
@@ -128,9 +118,7 @@ def inbox_operation(store, project, request):
                 raise ProjectError('Read and acknowledge this event in the current PM generation first')
             state = 'handled'
         elif op == 'inbox.retry':
-            if row['state'] not in ('uncertain', 'sent'):
-                raise ProjectError('Only a sent or uncertain notification can be explicitly retried')
-            state = 'queued'
+            raise ProjectError('Legacy inbox delivery is retired; inspect the terminal and use hc send for a deliberate follow-up')
         else:
             state = 'acknowledged'
         store.db.execute('UPDATE inbox SET state=?,generation=?,handled_note=?,updated_at=? WHERE id=?',
@@ -138,12 +126,13 @@ def inbox_operation(store, project, request):
 
 
 def handoff(store, project):
-    """Transfer unread/unhandled project events, preserving delivery history."""
-    store.db.execute("UPDATE inbox SET state='queued',generation=NULL,updated_at=? WHERE project_id=? AND state!='handled'",
-                     (now(), project['id']))
+    """Retain transport history; the successor reads current business attention."""
+    # Do not retarget or replay old messages into a new PM session.
+    return None
 
 
 def due_checkpoints(store, project_id):
+    created = []
     with store.transaction():
         p = store.get(project_id)
         for item in p['items']:
@@ -151,57 +140,23 @@ def due_checkpoints(store, project_id):
             if item['status'] not in ('running', 'blocked') or not when or timestamp(when, 'checkpointAt') > now():
                 continue
             event_id = 'checkpoint-' + hashlib.sha256((project_id + ':' + item['id'] + ':' + str(item.get('activeRunId')) + ':' + when).encode()).hexdigest()[:32]
+            if store.db.execute('SELECT 1 FROM collaboration WHERE id=?', (event_id,)).fetchone():
+                continue
+            created.append(event_id)
             enqueue(store, p, 'checkpoint', dict(text='Checkpoint reached; inspect the existing execution before deciding what to do.',
                                                checkpointAt=when, lastProgressAt=item.get('lastProgressAt')),
                     item['id'], item.get('activeRunId'), event_id)
+    return created
 
 
 def notify_pm(store, project_id):
-    from . import runtime
-    # Same lock as binding/introduction: do not send to a former PM during handoff.
-    with runtime.lock(store, project_id + '-intro'):
-        p = store.get(project_id)
-        main = p['main']
-        if main['state'] != 'running' or not main.get('terminal'):
-            return 'waiting'
-        if main.get('scope') not in runtime.connected_scopes():
-            raise ProjectError('Follow-up service is connected to a different Core')
-        rows = store.db.execute("SELECT * FROM inbox WHERE project_id=? AND state='queued' AND notify=1 ORDER BY seq LIMIT 20", (project_id,)).fetchall()
-        if not rows:
-            return 'quiet'
-        terminal = runtime.hc(['get', main['terminal'], '--json'])
-        status = terminal.get('status') or {}
-        if terminal.get('state') != 'live' or status.get('state') != 'idle' or not status.get('app'):
-            return 'waiting'
-        ids = [row['id'] for row in rows]
-        placeholders = ','.join('?' for _ in ids)
-        with store.transaction():
-            # Persist reservation BEFORE performing the external send.
-            store.db.execute(f"UPDATE inbox SET state='sending',generation=?,updated_at=? WHERE id IN ({placeholders}) AND state='queued'",
-                             (main['generation'], now(), *ids))
-        message = ('项目有待处理回报或检查点。请读取持久收件箱，核对事实后确认接收并处理；不要重复派发已有执行。\n'
-                   + runtime.cli_prefix(store) + ' inbox --project ' + project_id + '\n'
-                   + '本次事件：' + ', '.join(ids) + '\n消息送达不等于处理完成；使用 inbox.acknowledge / inbox.handle 记录处理。')
-        state, detail = 'sent', None
-        try:
-            runtime.hc(['send', main['terminal'], message, '--if', 'idle', '--json'])
-        except ProjectError as exc:
-            state, detail = 'uncertain', str(exc)
-        with store.transaction():
-            for event_id in ids:
-                row = store.db.execute('SELECT state,receipt FROM inbox WHERE id=?', (event_id,)).fetchone()
-                receipts = json.loads(row['receipt']) if row['receipt'] else []
-                receipts.append(dict(state=state, generation=main['generation'], at=now(), detail=detail))
-                # A fast PM may already have acknowledged; do not overwrite its state.
-                store.db.execute("UPDATE inbox SET state=CASE WHEN state='sending' THEN ? ELSE state END,receipt=?,updated_at=? WHERE id=?",
-                                 (state, json.dumps(receipts, ensure_ascii=False), now(), event_id))
-        return state
+    """Old entry point retained without reviving the former notification queue."""
+    return 'retired'
 
 
 def recover_sends(store):
-    # A crash after reservation may have happened after PTY delivery too.
-    with store.transaction():
-        store.db.execute("UPDATE inbox SET state='uncertain',updated_at=? WHERE state='sending'", (now(),))
+    # Keep legacy evidence intact; new sends are reserved as uncertain before I/O.
+    return None
 
 
 def service_status(store):
@@ -228,8 +183,10 @@ def service_tick(store):
         if not p.get('configuration', {}).get('followup', {}).get('enabled'):
             continue
         try:
-            due_checkpoints(store, p['id'])
-            results[p['id']] = dict(state=notify_pm(store, p['id']))
+            from .collaboration import deliver
+            posts = due_checkpoints(store, p['id'])
+            receipts = [deliver(store, p['id'], post_id, system=True) for post_id in posts]
+            results[p['id']] = dict(state='checked', checkpoints=len(posts), deliveries=receipts)
         except (ProjectError, OSError) as exc:
             results[p['id']] = dict(state='unavailable', error=str(exc))
     return results

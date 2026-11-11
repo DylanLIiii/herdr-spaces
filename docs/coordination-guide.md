@@ -1,5 +1,7 @@
 # PM 配置、协调与研究成果
 
+> 0.4.1：执行与消息已整合到 Herdr Core，当前行为以 [原生集成说明](native-core-integration.md) 为准。下文 0.4.0 的 inbox 确认/处理流程仅说明历史兼容，不再作为正常工作步骤。新版本使用 attention、collaboration、hc send / hc wait；服务只做检查点提醒。
+
 本指南对应 0.4.0。项目仍使用 Herdr 原生 Agent 终端；Spaces 保存项目状态、配置、协调事件和成果。账本位于项目机器，不同步第二份到桌面。
 
 ## 首次使用：先指定 PM

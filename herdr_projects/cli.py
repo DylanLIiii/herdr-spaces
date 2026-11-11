@@ -6,7 +6,7 @@ import sqlite3
 import sys
 
 from .store import ProjectError, Store, default_home, identity_from_env
-from . import __version__, runtime, onboarding, manager, coordination, setup_flow, teams
+from . import __version__, runtime, onboarding, manager, coordination, setup_flow, teams, collaboration
 from .schema import SCHEMA_VERSION, CAPABILITIES
 
 PROTOCOL_VERSION = 1
@@ -23,9 +23,7 @@ OPERATIONS = {
     'artifact.followup': ['requestId', 'id', 'workItemId?', 'title', 'brief? (creates or reuses a todo; never launches it)'],
     'decision.add': ['requestId', 'text', 'sourceRef', 'artifactRefs[]?'],
     'project.update': ['requestId', 'name?', 'goal?', 'stage?', 'summary?'],
-    'inbox.acknowledge': ['requestId', 'ids[]'],
-    'inbox.handle': ['requestId', 'ids[]', 'note'],
-    'inbox.retry': ['requestId', 'ids[]', 'note (explicit reconciliation before retry)'],
+
     'setup.invite': ['requestId (PM has read the setup Skill and asked whether to begin)'],
     'setup.begin': ['requestId', 'sourceRef (user consent)', 'nextAction?'],
     'setup.defer': ['requestId'],
@@ -85,11 +83,19 @@ def parser():
     for field in ('project', 'core-scope'):
         notify.add_argument('--' + field, required=True)
     notify.add_argument('--generation', required=True, type=int)
-    for name in ('show', 'context', 'skill', 'history', 'inbox', 'search', 'apply', 'report', 'start', 'worker', 'reconcile', '_run', 'read'):
+    for name in ('show', 'context', 'skill', 'history', 'inbox', 'attention', 'collaboration', 'post', 'notify', 'search', 'apply', 'report', 'start', 'worker', 'reconcile', '_run', 'read'):
         sub = commands.add_parser(name)
         sub.add_argument('--project', default=os.environ.get('HERDR_PROJECT_ID'), required=not bool(os.environ.get('HERDR_PROJECT_ID')))
         if name == 'search':
             sub.add_argument('--query', required=True)
+        if name == 'collaboration':
+            sub.add_argument('--after', type=int, default=0)
+            sub.add_argument('--item')
+            sub.add_argument('--post')
+        if name == 'post':
+            sub.add_argument('--notify', action='store_true', help='Deliver once to explicit recipients through hc')
+        if name == 'notify':
+            sub.add_argument('--post', required=True)
         if name == 'inbox':
             sub.add_argument('--after', type=int, default=0)
             sub.add_argument('--include-handled', action='store_true')
@@ -98,7 +104,7 @@ def parser():
             source.add_argument('--resource', help='Read a complete text resource relative to the configured Skill directory')
             source.add_argument('--list', action='store_true', help='List all files in the configured Skill directory')
             source.add_argument('--setup', action='store_true', help='Activate the bundled PM-led setup Skill, including with a custom PM guide')
-        if name in ('apply', 'report'):
+        if name in ('apply', 'report', 'post'):
             sub.add_argument('--file', required=True, help='JSON request file, or - for stdin')
         if name in ('apply', 'worker'):
             sub.add_argument('--revision', type=int, required=True)
@@ -138,7 +144,9 @@ def main(argv=None):
         elif args.action == 'team-template':
             result = teams.template(args.template, args.routing, args.backend, args.model)
         elif args.action == 'operations':
-            result = dict(operations=OPERATIONS, note='All apply requests require op, requestId and the current project revision. Call from the managed Main terminal. Replaying the same requestId/content is idempotent.')
+            result = dict(operations=OPERATIONS,
+                          post=['requestId', 'workItemId', 'kind: finding|question|review|reply|assignment|decision', 'text', 'recipients[] (pm or project run ids)', 'artifactRefs[]?', 'replyTo?'],
+                          note='apply requires the current Main and project revision; post allows active Workers on their own task. Use post --notify for one hc delivery attempt. No inbox acknowledgements are required.')
         else:
             action = args.action
             scopes = runtime.connected_scopes() if (action == 'snapshot' and args.terminal) or (action == 'read' and args.core_scope) else None
@@ -188,6 +196,18 @@ def main(argv=None):
                 result = store.history(args.project)
             elif action == 'inbox':
                 result = coordination.inbox(store, args.project, args.after, args.include_handled)
+                result['deprecated'] = 'Legacy history only. Use attention for outstanding work; collaboration for records.'
+            elif action == 'attention':
+                result = collaboration.attention(store.get(args.project))
+            elif action == 'collaboration':
+                result = collaboration.read(store, args.project, args.after, args.item, args.post)
+            elif action == 'post':
+                identity = identity_from_env(store)
+                result = collaboration.post(store, args.project, read_json(args.file), identity)
+                if args.notify:
+                    result['delivery'] = collaboration.deliver(store, args.project, result['postId'], identity)
+            elif action == 'notify':
+                result = collaboration.deliver(store, args.project, args.post, identity_from_env(store))
             elif action == 'search':
                 from .artifacts import search
                 result = dict(artifacts=search(store.public(store.get(args.project)), args.query))
@@ -203,7 +223,13 @@ def main(argv=None):
                 request = read_json(args.file)
                 if not isinstance(request, dict):
                     raise ProjectError('Report must be an object')
-                result = store.report(args.project, request, identity_from_env(store))
+                identity = identity_from_env(store)
+                result = store.report(args.project, request, identity)
+                if result.get('postId') and not result.get('replayed'):
+                    try:
+                        result['delivery'] = collaboration.deliver(store, args.project, result['postId'], identity)
+                    except (OSError, ProjectError) as exc:
+                        result['delivery'] = dict(state='unavailable', error=str(exc))
             elif action in ('start', 'worker'):
                 project = store.get(args.project) if action == 'worker' else {}
                 profile = teams.resolve(project, args.role, args.backend, args.model, args.tier) if action == 'worker' else None

@@ -1,0 +1,26 @@
+{
+  "local": {
+    "version": "0.4.1",
+    "schema": 3,
+    "runtime": "/Users/dylan/.config/herdr-app/projects-runtime/projects-pm",
+    "backup": "/Users/dylan/.local/share/herdr-spaces/backups/native-041-20261111T124821Z",
+    "projectsPreserved": 3,
+    "serviceRestarted": false,
+    "terminalRestarts": 0,
+    "updatedMods": [
+      "projects-pm-panel",
+      "projects-pm-setup",
+      "projects-pm-agents"
+    ]
+  },
+  "ts-mini": {
+    "version": "0.4.1",
+    "schema": 3,
+    "runtime": "/Users/dylanli/.local/share/herdr-spaces/runtime/projects/6194450e25534835012a",
+    "backup": "/Users/dylanli/.local/share/herdr-spaces/backups/native-041-20261111T124821Z",
+    "projectsPreserved": 1,
+    "serviceRestarted": true,
+    "terminalRestarts": 0,
+    "updatedMods": []
+  }
+}

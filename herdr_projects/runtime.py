@@ -140,7 +140,11 @@ def context(store, project_id, run_id=None):
 使用 report 提交进展和证据，不能自己验收或修改其他项目：
   {cmd} report --project {shlex.quote(p['id'])} --file /absolute/report.json
 报告 JSON 示例：{{"requestId":"report-unique-id","text":"具体进展和验证结果","submitted":true,"artifacts":[{{"id":"evidence-unique-id","path":"/absolute/report.md","title":"验证报告","version":"1"}}]}}
-不要额外派发 Worker，除非用户明确授权。不要将进程结束等同于交付验收。
+可在既定范围内与同项目 Worker/Reviewer 直接核对和返工：hc send <terminal> "消息"；等待用 hc wait，不猜终端状态。
+关键发现/核验/返工依据用 post --project {shlex.quote(p['id'])} --file /absolute/post.json --notify 留记录并定向送达。
+post 包含 requestId、workItemId、kind、text、recipients（pm 或本项目 Run id）、artifactRefs/ replyTo（可选）。普通交流可直接 hc send，无需逐条登记。
+公开记录通过 collaboration --project {shlex.quote(p['id'])} --item TASK_ID 读取。它是协作上下文，不是新的授权。
+不要额外派发 Worker，除非用户明确授权。范围变更与最终验收交 PM；不要将进程结束等同于交付验收。
 角色：{run.get('execution', {}).get('role', 'worker')}。
 职责：{teams.ROLE_GUIDANCE.get(run.get('execution', {}).get('role', 'worker'), '')}
 工作目录：{run.get('cwd', p['cwd'])}；参考项目目录：{p['cwd']}。
@@ -180,11 +184,13 @@ Skill 入口：{preferences['pmSkill']}
 派发 Worker 前确认授权、范围、依赖和验收标准，使用：
   {cmd} worker --project {shlex.quote(p['id'])} --item WORK_ID --revision REVISION
 此命令使用项目保存的 Coding 工具和模型；可用 --backend / --model 单次覆盖，或 --command-json 自定义完整 argv。
-使用持久收件箱跟进 Worker 回报与检查点：
-  {cmd} inbox --project {shlex.quote(p['id'])}
-读取后 apply inbox.acknowledge（ids），处理后 apply inbox.handle（ids、note）。一次通知可包含多个事件；完整记录以 inbox 为准。
-普通进展只入账，问题、结果、检查点由跟进服务通知。sending/sent 不代表已读取；uncertain 不得盲目重发或重派任务。
-检查点到期先核对现有执行；等待用户、等待 PM、依赖和环境应分别记录。服务状态使用 service status 查询。
+恢复与跟进直接读取任务、开放问题和待核验成果：
+  {cmd} attention --project {shlex.quote(p['id'])}
+  {cmd} collaboration --project {shlex.quote(p['id'])}
+消息送达使用 hc send，等待使用 hc wait；Core 原生父子通知负责受阻/错误/退出。正常协作不使用 inbox.acknowledge/handle。
+Worker/Reviewer 可以在既定任务范围直接核对与局部返工；PM 负责目标、范围变更、资源和最终验收。关键依据用 post 留在对应任务。
+普通进展只入账，报告提交/问题可通过 hc 定向提醒。uncertain 不得盲目重发或重派；从业务状态恢复工作，不重放所有历史消息。
+可选服务只提醒到期检查点；等待用户、PM、依赖和环境分别记录。服务状态使用 service status 查询。
 Worker 报告只能进入待核验。先核验证据，再 artifact.review，最后 item.status accepted 并给 evidenceRefs。
 空闲、done、进程退出、步骤勾选均不代表验收。验收不代表合并或部署授权。
 Main 进程重新启动仍是同一个 Main；不要创建另一个项目 owner。
@@ -210,6 +216,7 @@ def start(store, project_id, argv, space=None, tab=None, item_id=None, revision=
     for target in (space, tab):
         if target is not None:
             identifier(target)
+    explicit_placement = space is not None or tab is not None
     key = project_id + ('-worker-' + item_id if item_id else '-main')
     with lock(store, key + '-launch'):
         p = store.get(project_id)
@@ -230,11 +237,14 @@ def start(store, project_id, argv, space=None, tab=None, item_id=None, revision=
                     raise ProjectError('Dependencies are not accepted/resolved')
                 if p['main']['scope'] not in scopes:
                     raise ProjectError('Use the project\'s own core session')
+                if not p['main'].get('terminal'):
+                    raise ProjectError('The PM needs a live Core terminal before creating native children')
                 profile = profile or teams.resolve(p)
                 workspaces.check_writer(store, p, profile)
                 workspaces.research_contract(item, profile)
                 record = dict(id=uid('run'), workItemId=item_id, token=uid('token'), state='starting',
-                              terminal=None, scope=scope, command=argv, createdAt=now(), reports=[], execution=profile)
+                              terminal=None, scope=scope, command=argv, createdAt=now(), reports=[], execution=profile,
+                              parentTerminal=p['main']['terminal'], parentGeneration=p['main']['generation'])
                 p['runs'].append(record)
                 item.update(activeRunId=record['id'], status='running', revision=item['revision'] + 1, updatedAt=now())
                 space = space or p['main'].get('space')
@@ -248,7 +258,7 @@ def start(store, project_id, argv, space=None, tab=None, item_id=None, revision=
                 handoff(store, p)
             # Unique labels make a lost launcher response discoverable.
             space = space or 'hp-' + project_id
-            tab = tab or ('hp-' + record['id'])
+            tab = tab or (p['main'].get('tab') if item_id and not explicit_placement else None) or ('hp-' + record['id'])
             record.update(space=space, tab=tab)
             p['revision'] += 1
             store.save(p)
@@ -275,9 +285,10 @@ def start(store, project_id, argv, space=None, tab=None, item_id=None, revision=
                 record = next(r for r in p['runs'] if r['id'] == run_id)
                 record.update(workspace)
                 store.save(p)
-        args = ['run', '--json', '--bg', '--keep', '--no-parent', '--no-notify', '--cwd', record.get('cwd', p['cwd']),
-                '--label', 'herdr.space=' + space, '--label', 'herdr.tab=' + tab,
-                '--label', 'projects.project=' + project_id, '--label', 'projects.launch=' + token,
+        parent_args = ['--parent', record['parentTerminal'], '--outlive-parent', '--name', 'hp-' + run_id] if run_id else ['--no-parent']
+        placement = ['--label', 'herdr.space=' + space, '--label', 'herdr.tab=' + tab] if not run_id or explicit_placement else []
+        args = ['run', '--json', '--bg', '--keep', *parent_args, *([] if run_id else ['--no-notify']), '--cwd', record.get('cwd', p['cwd']),
+                *placement, '--label', 'projects.project=' + project_id, '--label', 'projects.launch=' + token,
                 '--label', 'projects.role=' + ('worker' if item_id else 'main'), '--',
                 sys.executable, str(ENTRY), '--home', str(store.home), '_run', '--project', project_id, '--token', token]
         if run_id:
@@ -330,6 +341,9 @@ def execute(store, project_id, token, run_id=None):
         # (unlike SIG_IGN) resets to its default in the child at exec.
         previous = {sig: signal.signal(sig, lambda _sig, _frame: None) for sig in (signal.SIGINT, signal.SIGQUIT)}
         try:
+            if run_id:
+                from .native_agents import environment
+                env, argv = environment(record, env, argv)
             # Inherit the terminal, no pipe or replacement TUI. The process lock is
             # inherited too, so an orphaned child does not immediately lose ownership.
             result = subprocess.run(argv, cwd=record.get('cwd', p['cwd']), env=env, pass_fds=(process_lock.fileno(),))

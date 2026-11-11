@@ -25,6 +25,7 @@ export default class Project extends View {
     this.query.on('submit',(_e,cx)=>this.search(cx));
     this.query.on('focus',()=>{this.searchFocused=true;});
     this.query.on('blur',()=>{this.searchFocused=false;});
+    this.collaborationItems={};this.collaborationBusy=null;
     this.refresh(cx);
     // Only the external ledger is polled. Native terminal/focus/theme data is reactive.
     cx.timer.every(5000,cx=>{ if(this.visible()&&!this.closed)this.refresh(cx); });
@@ -53,7 +54,7 @@ export default class Project extends View {
   refresh(cx) {
     if(this.closed)return;
     const key=this.currentKey(), loc=this.currentLocation();
-    if(key!==this.key){this.key=key;this.epoch++;this.project=null;this.origin=null;this.detail=null;this.file=null;this.preview=null;this.error=null;this.busy=false;this.tab='tasks';this.attentionOnly=false;this.selected=null;this.searchResults=null;this.query.set_value('');}
+    if(key!==this.key){this.key=key;this.epoch++;this.project=null;this.origin=null;this.detail=null;this.file=null;this.preview=null;this.error=null;this.busy=false;this.tab='tasks';this.attentionOnly=false;this.selected=null;this.searchResults=null;this.query.set_value('');this.collaborationItems={};}
     if(this.busy||!loc.terminal)return;
     const epoch=this.epoch, ticket=++this.ticket;
     this.busy=true;
@@ -75,8 +76,7 @@ export default class Project extends View {
     if(this.key!==this.currentKey()){this.refresh(cx);return;}
     const address=this.address(record),live=this.live(record);
     if(!live){this.error='此执行终端已退出或不可访问。项目记录仍保留；请在项目所在机器使用 herdr-project start / reconcile 恢复。';cx.notify();return;}
-    if(panes().some(p=>p.terminal===address))run('pane.focus',{terminal:address});
-    else run('terminal.peek',{terminal:address});
+    run('agent.focus',{terminal:address});
   }
   openFile(id,cx,member=null,offset=0) {
     if(!this.origin||this.key!==this.currentKey()){this.refresh(cx);return;}
@@ -108,10 +108,19 @@ export default class Project extends View {
     }catch(e){if(!this.closed&&epoch===this.epoch)this.error=e;}finally{if(!this.closed&&sequence===this.searchSequence){this.searching=false;cx.notify();}}});
   }
   visibleArtifacts(p){return this.searchResults?p.artifacts.filter(a=>this.searchResults.includes(a.id)):p.artifacts.filter(a=>artifactMatches(a,this.query.value().trim()));}
+  loadCollaboration(item,cx,after=0){
+    if(!this.origin||this.collaborationBusy)return;
+    const epoch=this.epoch,origin=this.origin,project=this.project.id;
+    this.collaborationBusy=item;
+    cx.spawn(async cx=>{try{
+      const result=await this.call(['collaboration','--project',project,'--item',item,'--after',String(after)],origin);
+      if(!this.closed&&epoch===this.epoch)this.collaborationItems[item]={entries:[...(after?this.collaborationItems[item]?.entries||[]:[]),...result.entries],nextAfter:result.nextAfter};
+    }catch(e){if(!this.closed&&epoch===this.epoch)this.error=e;}finally{if(!this.closed){this.collaborationBusy=null;cx.notify();}}});
+  }
   keyboardRows() {
     const p=this.project;if(!p||this.detail||this.file)return [];
     if(this.tab==='tasks')return groups(p.items.filter(i=>!this.attentionOnly||(needsAttention(i)&&!needsPerson(i)))).filter(g=>!this.folded.has(g.id)).flatMap(g=>g.items.map(i=>({key:'item:'+i.id,open:cx=>{this.detail=i.id;cx.notify();}})));
-    if(this.tab==='sessions')return [p.main,...p.runs.slice().reverse()].map(r=>({key:'session:'+r.id,open:cx=>this.navigate(r,cx)}));
+    if(this.tab==='sessions')return [p.main,...p.runs.slice().reverse().filter(r=>this.showSessionHistory||p.items.some(i=>i.activeRunId===r.id))].map(r=>({key:'session:'+r.id,open:cx=>this.navigate(r,cx)}));
     return [{id:'pm'},...this.visibleArtifacts(p)].map(a=>({key:'file:'+a.id,open:cx=>this.openFile(a.id,cx)}));
   }
   handleKey(e,cx) {
@@ -160,17 +169,19 @@ export default class Project extends View {
       .child(h_flex().gap(8).items_center().child(div().flex_1().min_w(0).truncate().tooltip(isMain?p.name:item?.title||record.id).font_medium().child(isMain?'项目负责人':item?.title||record.id))
         .child(badge(sessionStatus(record,live),record.state==='exited'?t.muted:(t[live?.status]||t.muted),t)))
       .child(caption((isMain?'PM':roleLabels[record.execution?.role]||'Worker')+' · '+(record.terminal||'尚无终端')+(record.execution?.backend?' · '+record.execution.backend:''),t))
-      .when(Boolean(item),el=>el.child(caption('任务账本 · '+(labels[item.status]||item.status),t)));
+      .when(!isMain,el=>el.child(caption(record.parentTerminal?'父终端 · '+record.parentTerminal:'旧版独立终端',t)))
+      .when(Boolean(item),el=>el.child(caption((item.activeRunId===record.id?'任务账本 · ':'历史执行 · 当前任务为')+(labels[item.status]||item.status),t)))
+      .when(Boolean(live&&!live.status&&record.state!=='exited'),el=>el.child(caption('程序尚未提供状态；点击进入原生终端查看。',t)));
   }
   sessions(p,t) {
-    const workers=p.runs.slice().reverse();
-    const groupsByStatus=new Map();
-    for(const r of workers){const label=sessionStatus(r,this.live(r));if(!groupsByStatus.has(label))groupsByStatus.set(label,[]);groupsByStatus.get(label).push(r);}
+    const workers=p.runs.slice().reverse(),current=workers.filter(r=>p.items.some(i=>i.activeRunId===r.id)),history=workers.filter(r=>!current.includes(r));
     return v_flex().child(this.section('项目负责人',[this.sessionRow(p,p.main,true,t)],t))
       .when(!workers.length,el=>el.child(v_flex().p(12).mb(16).rounded(8).bg(t.surface).gap(6)
         .child(paragraph('尚未派发 Worker',t)).child(caption('PM 派发后，可在这里查看执行状态并进入原终端。',t))))
-      .children([...groupsByStatus].map(([label,list])=>this.section(label+' · '+list.length,list.map(r=>this.sessionRow(p,r,false,t)),t)))
-      .child(caption('会话状态来自执行端；是否完成以任务账本为准。',t));
+      .when(current.length>0,el=>el.child(this.section('执行者 · '+current.length,current.map(r=>this.sessionRow(p,r,false,t)),t)))
+      .when(history.length>0,el=>el.child(button('session-history',(this.showSessionHistory?'收起':'查看')+'历史执行 · '+history.length,(_e,cx)=>{this.showSessionHistory=!this.showSessionHistory;cx.notify();},t))
+        .when(this.showSessionHistory,el=>el.children(history.map(r=>this.sessionRow(p,r,false,t)))))
+      .child(caption('状态来自程序上报；任务完成以 PM 核验为准。',t));
   }
   fileRow(a,t) {return h_flex().id('artifact-'+a.id).py(8).px(6).gap(8).rounded(6).bg(this.selected==='file:'+a.id?t.selected:t.background).cursor_pointer().hover(s=>s.bg(t.hover))
     .on_click((_e,cx)=>this.openFile(a.id,cx)).child(svg('mods/files/file.svg').size(14).text_color(t.muted))
@@ -202,6 +213,15 @@ export default class Project extends View {
       .when(i.artifactIds.length>0,el=>el.child(this.section('资料',p.artifacts.filter(a=>i.artifactIds.includes(a.id)).map(a=>this.fileRow(a,t)),t)))
       .when(Boolean(i.resolution),el=>el.child(this.section('最新说明',[paragraph(i.resolution,t)],t)))
       .when(Boolean(active?.reports?.length),el=>el.child(this.section('执行回报',active.reports.slice(-5).map(r=>paragraph(r.text,t)),t)))
+      .child(this.section('协作记录',[
+        ...((this.collaborationItems[i.id]||p.collaboration)?.entries||[]).filter(e=>e.work_item_id===i.id).map(e=>v_flex().gap(5).py(6)
+          .child(caption(e.authorName+' · '+new Date(e.created_at).toLocaleString(),t))
+          .child(paragraph(e.body.text,t))
+          .when(e.recipients.length>0,el=>el.child(caption('相关成员 · '+e.recipients.join('、'),t)))
+          .children(e.artifact_refs.map(id=>button('post-evidence-'+e.id+'-'+id,'阅读依据',(_e,cx)=>this.openFile(id,cx),t)))
+          .when(e.deliveries.some(d=>d.state==='uncertain'||d.state==='unavailable'),el=>el.child(caption('提醒未确认送达；记录已保留',t)))),
+        button('task-collaboration',this.collaborationBusy===i.id?'读取中…':this.collaborationItems[i.id]?.nextAfter?'继续读取协作记录':'读取任务协作记录',(_e,cx)=>this.loadCollaboration(i.id,cx,this.collaborationItems[i.id]?.nextAfter||0),t)
+      ],t))
       .child(v_flex().pt(10).gap(6).border_t(1).border_color(t.border).child(caption('来源 · '+i.sourceRef,t))
         .child(caption('记录 · '+i.id+' · 修订 '+i.revision,t)).child(caption('维护者 · 本项目 PM',t)))
       .child(h_flex().mt(12).gap(6).child(button('detail-main',i.kind==='todo'?'到 PM 细化':'到 PM 核验',(_e,cx)=>this.navigate(p.main,cx),t))
@@ -264,7 +284,7 @@ export default class Project extends View {
       .child(div().text_size(12).text_color(t.muted).tooltip(p.goal).child(p.summary||p.stage|| (p.goal.length>100?p.goal.slice(0,100)+'…':p.goal)))
       .when(Boolean(p.setup&&p.setup.state!=='ready'),el=>el.child(button('project-setup-state',setupLabels[p.setup.state]||'项目配置',()=>this.setup(),t)))
       .when(Boolean(p.coordination&&(!p.coordination.live||p.coordination.status?.state==='unavailable')),el=>el.child(paragraph(p.coordination.live?'跟进服务暂时无法连接执行端；事件已保留。':'自动跟进服务未运行，请进入 PM 恢复。',t)))
-      .when(Boolean(p.inbox?.entries?.some(e=>e.state==='uncertain')),el=>el.child(paragraph('有通知送达待确认；PM 可直接读取持久收件箱。',t)))
+      .when(Boolean(p.collaboration?.entries?.some(e=>e.deliveries.some(d=>d.state==='uncertain'))),el=>el.child(paragraph('有协作提醒送达待确认，相关记录已保留。',t)))
       .child(h_flex().gap(8).items_center()
         .child(badge('PM · '+sessionStatus(p.main,pm),p.main.state==='exited'?t.muted:(t[pm?.status]||t.muted),t))
         .child(div().flex_1()).child(button('project-main','进入 PM ↗',(_e,cx)=>this.navigate(p.main,cx),t,true)))

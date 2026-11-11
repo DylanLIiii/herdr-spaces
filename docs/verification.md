@@ -1,5 +1,14 @@
 # 验证记录
 
+## 0.4.1 Core 原生集成
+
+- `npm run check`、`npm test`（97 Python + 37 JavaScript）与 `git diff --check` 通过。覆盖原生父子启动、OpenCode事件到PSP状态映射、直接hc送达与不明结果去重、同级协作权限、schema2历史保留、PM交接、历史执行折叠及协作记录UI。
+- 真实 OpenCode 2.2.7 mini + V2状态插件 + Core验证了父子关系和真实 idle 上报，未调用模型；运行/阻塞/错误/问题状态映射使用原生事件结构的回归测试。见 [mini-result.json](native-core/mini-result.json)。
+- Linux/Xvfb真实Core与原生UI **29项**通过，特别验证检查点服务停止时报告仍经hc送达、Worker parent关系、无强制新Tab和原生生命周期通知启用；截图已查看。见 [result.json](native-core/result.json)。
+- 真实machine --via远端协议 **8项**通过，含schema3、两客户端同源读取、断线重连及成果哈希。见 [remote-result.json](native-core/remote-result.json)。
+- 本机当前sulan-tools的Spaces组件与ts-mini项目运行程序已备份并更新；3个本机项目、1个远端项目的身份/历史保持，未重启Agent。见 [installation.json](native-core/installation.json)。旧进程不热加载新插件，旧终端无公开reparent接口，明确保留兼容标记，不宣称旧会话已获得父关系。
+- 边界、接口、升级说明见 [native-core-integration.md](native-core-integration.md)。下方0.4.0为历史证据。
+
 ## 0.4.0 PM 协调与研究闭环
 
 - `npm run check`、`npm test`（**97 Python + 32 JavaScript**）、`git diff --check` 通过。覆盖旧 schema 事务迁移、回报幂等/回滚、检查点去重、消息不明与 PM 交接、配置暂缓/恢复、角色路由、真实 Git worktree 隔离、输入证据变更拒绝、产物发布中断及版本关联。

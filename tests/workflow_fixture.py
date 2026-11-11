@@ -6,7 +6,7 @@ import sys
 import traceback
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from herdr_projects import coordination, runtime, teams, setup_flow
+from herdr_projects import coordination, collaboration, runtime, teams, setup_flow
 from herdr_projects.store import Store, identity_from_env, uid
 
 root = Path(sys.argv[1])
@@ -54,15 +54,11 @@ def launch_research():
 
 
 def review():
-    events = coordination.inbox(store, project_id)['entries']
-    if events:
-        apply('inbox.acknowledge', ids=[event['id'] for event in events])
+    assert collaboration.attention(store.get(project_id))['items']
     apply('artifact.review', id='research-brief', status='accepted', note='Fixture: read published files and checked the cited repository evidence')
     apply('artifact.disposition', id='research-brief', disposition='adopted', note='Adopt durable inbox with explicit PM handling; implementation follow-up required')
     apply('item.status', id='study', status='accepted', note='Published fixture brief and provenance verified', evidenceRefs=['research-brief'])
     apply('artifact.followup', id='research-brief', workItemId='validate-inbox', title='验证通知恢复语义', brief='Check interrupted delivery against the adopted study')
-    if events:
-        apply('inbox.handle', ids=[event['id'] for event in events], note='Reviewed report, recorded decision and created a linked follow-up')
     marker('reviewed', store.public(store.get(project_id)))
 
 
@@ -82,12 +78,13 @@ def worker():
                         '## 依据与适用范围\n\n[来源实现](https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/src/app/effects.ts)\n\n'
                         '本示例验证项目协议与产物生命周期；未验证模型研究质量。\n')
         files.append(dict(path=path.name, role=role))
-    store.report(project_id, dict(requestId='fixture-submitted', text='研究包已提交，等待 PM 核验', kind='submitted', phase='交付核验',
+    result = store.report(project_id, dict(requestId='fixture-submitted', text='研究包已提交，等待 PM 核验', kind='submitted', phase='交付核验',
         artifacts=[dict(id='research-brief', workItemId='study', title='可靠协调与成果保管', kind='research', sourceRef='DeepSeek Effects implementation',
             bundle=dict(root=str(out), entrypoint='brief.md', files=files, workflow='deepresearch',
                 claims=[dict(id='durable-inbox', text='先保存事件，再交付通知；处理状态独立记录。', verification='verified',
                     note='Fixture source locator; test proves lifecycle, not research quality', limitations=['单项目机器；实际模型未参与'],
                     sources=[dict(reference='https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/src/app/effects.ts', locator='Effects.enqueue / attempt', accessedAt='2026-11-11')])]))]), identity)
+    collaboration.deliver(store, project_id, result['postId'], identity)
     marker('worker-submitted', dict(run=run['id'], outputRoot=str(out)))
     print('Research fixture submitted', flush=True)
     status('done')
@@ -110,7 +107,7 @@ try:
                     marker('error', dict(action=action, traceback=traceback.format_exc()))
                     traceback.print_exc()
                 status()
-            elif ' inbox --project ' in line:
+            elif ' collaboration --project ' in line:
                 marker('notification', dict(terminal=os.environ.get('HC_TERMINAL_ID'), line=line.strip()))
                 print('Inbox notification received; awaiting explicit fixture review.', flush=True)
                 status()

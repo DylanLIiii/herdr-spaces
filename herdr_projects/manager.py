@@ -2,7 +2,7 @@
 from pathlib import Path
 
 from .store import ProjectError, text
-from .teams import BACKENDS
+from .teams import BACKENDS, executable
 
 BUILTIN_SKILL = Path(__file__).resolve().parent / 'skills/project-manager/SKILL.md'
 
@@ -93,4 +93,8 @@ def worker_command(project, backend=None, model=None, custom=None, profile=None)
         argv += ['--prompt']
     if selected == 'feynman':
         argv += [profile.get('workflow', 'deepresearch') if profile else 'chat']
+    if selected == 'opencode':
+        import shutil
+        if not shutil.which(selected) and executable(selected):
+            argv[0] = executable(selected)
     return command(argv + ['{context}'], selected)

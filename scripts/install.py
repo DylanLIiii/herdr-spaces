@@ -16,7 +16,8 @@ ROOT = Path(__file__).resolve().parent.parent
 def runtime_bundle():
     names = ['project.py', 'LICENSE'] + ['herdr_projects/' + name for name in
         ('__init__.py', 'store.py', 'runtime.py', 'cli.py', 'onboarding.py', 'manager.py',
-         'schema.py', 'coordination.py', 'setup_flow.py', 'teams.py', 'workspaces.py', 'artifacts.py',
+         'schema.py', 'coordination.py', 'setup_flow.py', 'teams.py', 'workspaces.py', 'artifacts.py', 'native_agents.py', 'collaboration.py',
+         'integrations/opencode-status/index.js', 'integrations/opencode-status/package.json',
          'skills/herdr-spaces-setup/SKILL.md',
          'skills/project-manager/SKILL.md', 'skills/project-manager/references/subagents.md')]
     files = {name: (ROOT / name).read_text() for name in names}

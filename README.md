@@ -1,5 +1,7 @@
 # Herdr Spaces
 
+0.4.1 优先使用 Herdr Core 原生子终端、状态、消息和导航。升级与边界见 [原生集成说明](docs/native-core-integration.md)。
+
 Herdr 的原生项目侧栏，以及由本项目 Main 维护的持久账本。每个 Project 有且只有一个稳定 Main 身份；Main 和 Workers 运行在 Pi、Claude Code、Codex 等现有终端界面中。没有新的聊天界面。
 
 ![原生 Project 面板](docs/native/tasks.png)
@@ -14,7 +16,7 @@ Herdr 的原生项目侧栏，以及由本项目 Main 维护的持久账本。�
 - **项目归属机器**：账本、pm.md、产物、Main 和 Workers 都留在项目所在机器。桌面侧栏通过 Herdr 已有机器连接读取，不复制或同步另一份账本。
 - **PM 绑定与交接**：右键左侧 Agent → 设置 / 重新绑定 PM，选择或创建项目，也可确认重新绑定现有 PM。保留 Main 身份与项目记录，旧 PM 凭据失效。目标机器缺少对应项目运行程序时，设置流程自动准备或升级。
 - **PM 引导配置**：指定 PM 后激活 `herdr-spaces-setup`，由该 PM 询问是否开始。用户同意后检查环境、推荐团队、确认方案并验证；暂缓和交接保留答案与草案。
-- **持续协调**：结构化回报与持久收件箱同事务保存；项目机器上的普通后台服务负责通知和检查点，PM 明确确认接收与处理。消息送达不等于任务完成。
+- **持续协调**：结构化回报与持久收件箱同事务保存；项目机器上的普通后台服务负责通知和检查点，消息通过 hc 定向送达，PM 从任务/问题/成果读取待办，不再逐条确认信箱。消息送达不等于任务完成。
 - **角色团队**：开发 / 研究 / 混合模板，支持 Pi、Claude Code、Codex、OpenCode 和 Feynman；可选 Coding Hub 路由。写任务默认 worktree 隔离，研究输出保存在持久目录。
 - 基础功能无需后端 Hooks。启动指令交代维护协议，Main 显式调用项目 CLI；自动压缩/恢复注入可另行适配。
 
@@ -130,7 +132,7 @@ Main 将 todo 提升为 task 后，可在已有授权范围内派发 Worker：
 herdr-project worker --project my-project --item work-001 --revision CURRENT --backend pi
 ```
 
-Worker 自动获得角色、范围、验收标准、锁定配置和输入产物版本，通过 `report --file` 提交进展、问题或产物；它不能验收。Main 通过 `inbox` 跟进，先 `inbox.acknowledge`，完成协调后 `inbox.handle`。任务验收先 `artifact.review`，再 `item.status accepted` 并引用本任务已核验且内容未变的 evidenceRefs。
+Worker 自动获得角色、范围、验收标准、锁定配置和输入产物版本，通过 `report --file` 提交进展、问题或产物；它不能验收。Main 通过 `attention` 跟进开放事项，通过 `collaboration` 阅读关键协作依据。任务验收先 `artifact.review`，再 `item.status accepted` 并引用本任务已核验且内容未变的 evidenceRefs。
 
 研究包发布到独立持久目录，保留计划、草稿、来源、brief 和 provenance。`artifact.disposition` 记录采用 / 暂缓 / 不采用，`artifact.followup` 创建关联成果版本的待办；核验报告不等于采用建议。完整格式见 [产物发布](docs/coordination-guide.md#研究产物发布)。
 
@@ -166,7 +168,7 @@ python3 scripts/native_smoke.py --app /absolute/path/to/herdr-app
 
 `workflow_smoke.py` 使用独立 Core、账本和确定性 PM/Research 程序验证配置、后台服务重启、交接、产物核验及后续任务；可在 macOS / Linux 运行，带 `--app` 时检查真实原生窗口，Linux 需要 Xvfb。它不调用模型。
 
-运行程序与安装器均包含在本仓库中。使用 `python3 scripts/package.py` 可生成 `dist/herdr-spaces-0.4.0.tar.gz` 安装归档。0.4.0 使用 SQLite schema 2，旧运行程序会拒绝打开升级后的库；升级前用 SQLite backup API 保存备份，保留数据路径，先安装独立预览布局。远端设置会按能力探测准备新版本。
+运行程序与安装器均包含在本仓库中。使用 `python3 scripts/package.py` 可生成 `dist/herdr-spaces-0.4.1.tar.gz` 安装归档。0.4.1 使用 SQLite schema 3，旧运行程序会拒绝打开升级后的库；升级前用 SQLite backup API 保存备份，保留数据路径，先安装独立预览布局。远端设置会按能力探测准备新版本。
 
 ## 许可
 

@@ -4,202 +4,133 @@ import sqlite3
 import tempfile
 import unittest
 from unittest.mock import patch
-
-from herdr_projects import coordination as c, runtime, onboarding
-from herdr_projects.store import ProjectError, Store
+from herdr_projects import coordination as c, collaboration as board, runtime, onboarding
+from herdr_projects.store import Store, ProjectError
 
 
 class CoordinationTests(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(self.tmp.cleanup)
-        self.root = Path(self.tmp.name)
-        self.store = Store(self.root / 'ledger')
-        self.addCleanup(self.store.close)
-        p = self.store.create('one', 'One', 'Goal', self.root)
-        self.main = dict(role='main', project='one', main=p['main']['id'], generation=1, token='main-test')
+        self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup)
+        self.root=Path(self.tmp.name);self.store=Store(self.root/'ledger');self.addCleanup(self.store.close)
+        p=self.store.create('one','One','Goal',self.root)
+        self.main=dict(role='main',project='one',main=p['main']['id'],generation=1,token='main-test')
         with self.store.transaction():
-            p = self.store.get('one')
-            p['main'].update(state='running', generation=1, terminal='t1', scope='core:test', token='main-test')
-            self.store.save(p)
-        self.counter = 0
-        self.apply('todo.add', id='work', title='Research', sourceRef='user')
-        self.apply('todo.promote', id='work', brief='Read sources', acceptanceCriteria=['Trace key claims'])
-        with self.store.transaction():
-            p = self.store.get('one')
-            p['runs'].append(dict(id='run-one', workItemId='work', state='running', token='worker-test', reports=[]))
-            p['items'][0].update(status='running', activeRunId='run-one')
-            self.store.save(p)
-        self.worker = dict(role='worker', project='one', run='run-one', token='worker-test')
+            p=self.store.get('one');p['main'].update(state='running',generation=1,terminal='t1',scope='core:test',token='main-test');self.store.save(p)
+        self.counter=0
+        for task,run,terminal in [('work','run-one','t2'),('peer','run-peer','t3')]:
+            self.apply('todo.add',id=task,title=task,sourceRef='user')
+            self.apply('todo.promote',id=task,brief='scope',acceptanceCriteria=['evidence'])
+            with self.store.transaction():
+                p=self.store.get('one');p['runs'].append(dict(id=run,workItemId=task,state='running',token=run,terminal=terminal,scope='core:test',reports=[]));self.store.item(p,task).update(status='running',activeRunId=run);self.store.save(p)
+        self.worker=dict(role='worker',project='one',run='run-one',token='run-one')
 
-    def apply(self, op, **values):
-        self.counter += 1
-        return self.store.apply('one', self.store.get('one')['revision'],
-                                dict(requestId=f'apply-{self.counter}', op=op, **values), self.main)
+    def apply(self,op,**kw):
+        self.counter+=1
+        return self.store.apply('one',self.store.get('one')['revision'],dict(requestId='r-'+str(self.counter),op=op,**kw),self.main)
 
-    def report(self, report_id='report-one', **values):
-        return self.store.report('one', dict(requestId=report_id, text='Progress', **values), self.worker)
+    def report(self,id='report',**kw):
+        return self.store.report('one',dict(requestId=id,text='progress',**kw),self.worker)
 
-    def entries(self):
-        return c.inbox(self.store, 'one')['entries']
+    def post(self,**kw):
+        return board.post(self.store,'one',dict(requestId='post-1',workItemId='work',kind='review',text='Check this finding',recipients=['run-peer'],**kw),self.worker)
 
-    def terminal(self, args):
-        if args[0] == 'get':
-            return dict(address=args[1], state='live', status=dict(state='idle', app='pi'))
-        return dict(ok=True)
+    def terminal(self,args):
+        return dict(address=args[1],state='live',status=dict(state='working',app='opencode')) if args[0]=='get' else dict(ok=True)
 
-    def test_transactional_migration_preserves_legacy_data_and_rejects_future(self):
-        home = self.root / 'old'
-        home.mkdir()
-        db = sqlite3.connect(home / 'projects.sqlite3')
-        db.execute('CREATE TABLE projects(id TEXT PRIMARY KEY,body TEXT NOT NULL)')
-        old = self.store.get('one')
-        old.pop('configuration'); old.pop('setup')
-        db.execute('INSERT INTO projects VALUES(?,?)', ('one', json.dumps(old)))
-        db.execute('PRAGMA user_version=1'); db.commit(); db.close()
-        with_store = Store(home)
+    def test_migration_keeps_schema2_inbox_and_identity(self):
+        self.store.db.execute("INSERT INTO inbox(id,project_id,kind,body,state,notify,created_at,updated_at) VALUES('old','one','submitted','{}','acknowledged',1,'old','old')")
+        old=self.store.get('one');self.store.db.execute('PRAGMA user_version=2')
+        other=Store(self.store.home)
         try:
-            p = with_store.get('one')
-            self.assertEqual(old['main'], p['main'])
-            self.assertEqual(old['items'], p['items'])
-            self.assertEqual(old['revision'], p['revision'])
-            self.assertEqual('pending', p['setup']['state'])
-            self.assertEqual(2, with_store.db.execute('PRAGMA user_version').fetchone()[0])
-            with_store.db.execute('PRAGMA user_version=99')
-        finally:
-            with_store.close()
-        with self.assertRaisesRegex(ProjectError, 'Unsupported ledger schema'):
-            Store(home)
+            self.assertEqual(old,other.get('one'))
+            self.assertEqual('acknowledged',other.db.execute('SELECT state FROM inbox').fetchone()[0])
+            self.assertEqual(3,other.db.execute('PRAGMA user_version').fetchone()[0])
+            other.db.execute('PRAGMA user_version=99')
+            with self.assertRaises(ProjectError):Store(self.store.home)
+        finally:other.close()
 
-    def test_duplicate_reports_and_progress_coalescing(self):
-        self.report(phase='Reading', checkpointAt='2030-01-01T00:00:00Z')
-        self.assertTrue(self.report(phase='Reading', checkpointAt='2030-01-01T00:00:00Z')['replayed'])
-        self.report('report-two', phase='Verifying')
-        rows = self.entries()
-        self.assertEqual(1, len(rows))
-        self.assertEqual(0, rows[0]['notify'])
-        self.assertEqual('Verifying', rows[0]['body']['phase'])
-        self.assertEqual(2, len(self.store.get('one')['runs'][0]['reports']))
+    def test_reports_record_once_without_new_inbox(self):
+        self.report(kind='submitted');self.assertTrue(self.report(kind='submitted')['replayed'])
+        self.assertEqual(1,len(self.store.get('one')['runs'][0]['reports']))
+        self.assertEqual(1,len([e for e in board.read(self.store,'one')['entries'] if e['kind']=='submitted']))
+        self.assertEqual([],c.inbox(self.store,'one')['entries'])
+        self.assertEqual('review',board.attention(self.store.get('one'))['items'][0]['status'])
 
-    def test_invalid_artifact_rolls_back_report_and_inbox(self):
-        with self.assertRaises(OSError):
-            self.report(kind='submitted', artifacts=[dict(path=str(self.root / 'missing'), id='evidence')])
-        self.assertEqual([], self.entries())
-        self.assertEqual([], self.store.get('one')['runs'][0]['reports'])
-        self.assertEqual('running', self.store.get('one')['items'][0]['status'])
+    def test_invalid_report_rolls_back_record(self):
+        before=len(board.read(self.store,'one')['entries'])
+        with self.assertRaises(OSError):self.report(kind='submitted',artifacts=[dict(id='ev',path=str(self.root/'missing'))])
+        self.assertEqual(before,len(board.read(self.store,'one')['entries']))
+        self.assertEqual([],self.store.get('one')['runs'][0]['reports'])
 
-    def test_structured_question_and_submission(self):
-        self.report(kind='question', question=dict(text='Which benchmark?', recipient='user', recommendation='Use baseline'))
-        self.assertEqual('user', self.store.get('one')['items'][0]['waitingOn'])
-        self.report('finished', kind='submitted')
-        item = self.store.get('one')['items'][0]
-        self.assertEqual('review', item['status'])
-        self.assertEqual('pm', item['waitingOn'])
-        self.assertIsNone(item['question'])
-        self.assertEqual(2, len(self.entries()))
+    def test_structured_questions_and_submission(self):
+        self.report(kind='question',question=dict(text='Which scope?',recipient='user'))
+        self.assertEqual('user',board.attention(self.store.get('one'))['items'][0]['waitingOn'])
+        self.report('second',kind='submitted')
+        item=self.store.item(self.store.get('one'),'work');self.assertIsNone(item['question']);self.assertEqual('review',item['status'])
 
-    def test_question_on_progress_still_notifies_pm(self):
-        self.report(kind='progress', question=dict(text='Choose scope', recipient='user'))
-        self.assertEqual(1, self.entries()[0]['notify'])
-        self.report('routine', phase='Continue independent work')
-        self.assertEqual(2, len(self.entries()))
-        self.assertEqual('Choose scope', self.entries()[0]['body']['question']['text'])
+    def test_invalid_progress_rejected(self):
+        for values in [dict(kind='question'),dict(waitingOn='anybody'),dict(checkpointAt='tomorrow'),dict(checkpointAt='2030-01-01T00:00:00'),dict(kind='progress',submitted=True)]:
+            with self.assertRaises(ProjectError):self.report(**values)
 
-    def test_invalid_progress_is_rejected_without_mutation(self):
-        for values in [dict(kind='question'), dict(waitingOn='anybody'), dict(checkpointAt='tomorrow'),
-                       dict(checkpointAt='2030-01-01T00:00:00'), dict(kind='progress', submitted=True),
-                       dict(question=dict(text='Q', recipient='user'), waitingOn='pm')]:
-            with self.assertRaises(ProjectError):
-                self.report(**values)
-        self.assertEqual([], self.entries())
-
-    def test_checkpoint_once_across_restart_without_relaunch(self):
+    def test_checkpoints_are_once_and_do_not_reschedule(self):
         self.report(checkpointAt='2020-01-01T00:00:00Z')
-        c.due_checkpoints(self.store, 'one')
-        other = Store(self.store.home)
-        try:
-            c.due_checkpoints(other, 'one')
-        finally:
-            other.close()
-        self.assertEqual(1, len([e for e in self.entries() if e['kind'] == 'checkpoint']))
-        self.assertEqual(1, len(self.store.get('one')['runs']))
-        self.assertEqual('running', self.store.get('one')['items'][0]['status'])
+        self.assertEqual(1,len(c.due_checkpoints(self.store,'one')))
+        self.assertEqual([],c.due_checkpoints(self.store,'one'))
+        self.assertEqual(2,len(self.store.get('one')['runs']))
 
-    def test_acknowledgement_and_handling_are_explicit(self):
-        self.report(kind='submitted')
-        event = self.entries()[0]['id']
-        with self.assertRaises(ProjectError):
-            self.apply('inbox.handle', ids=[event], note='Done')
-        self.apply('inbox.acknowledge', ids=[event])
-        self.assertEqual('acknowledged', self.entries()[0]['state'])
-        self.apply('inbox.handle', ids=[event], note='Read sources; requested revision')
-        self.assertEqual([], self.entries())
-        self.assertEqual('review', self.store.get('one')['items'][0]['status'])
-        self.assertEqual('handled', c.inbox(self.store, 'one', include_handled=True)['entries'][0]['state'])
+    @patch.object(runtime,'connected_scopes',return_value=['core:test'])
+    def test_direct_peer_delivery_uses_hc_with_guard_and_deduplicates(self,scopes):
+        post=self.post()['postId']
+        with patch.object(runtime,'hc',side_effect=self.terminal) as hc:
+            self.assertEqual('sent',board.deliver(self.store,'one',post,self.worker)[0]['state'])
+            self.assertEqual('sent',board.deliver(self.store,'one',post,self.worker)[0]['state'])
+            sends=[v.args[0] for v in hc.call_args_list if v.args[0][0]=='send']
+            self.assertEqual(1,len(sends));self.assertEqual('t3',sends[0][1]);self.assertIn('--if',sends[0]);self.assertNotIn('--force',sends[0])
+        self.assertEqual('running',self.store.item(self.store.get('one'),'peer')['status'])
 
-    @patch.object(runtime, 'connected_scopes', return_value=['core:test'])
-    def test_send_does_not_acknowledge_and_is_not_repeated(self, scopes):
-        self.report(kind='submitted')
-        with patch.object(runtime, 'hc', side_effect=self.terminal) as hc:
-            self.assertEqual('sent', c.notify_pm(self.store, 'one'))
-            self.assertEqual('quiet', c.notify_pm(self.store, 'one'))
-            self.assertEqual(1, len([call for call in hc.call_args_list if call.args[0][0] == 'send']))
-        self.assertEqual('sent', self.entries()[0]['state'])
-        self.assertEqual(1, len(self.entries()[0]['receipt']))
-
-    @patch.object(runtime, 'connected_scopes', return_value=['core:test'])
-    def test_busy_pm_defers_and_unknown_send_never_retries(self, scopes):
-        self.report(kind='submitted')
-        with patch.object(runtime, 'hc', return_value=dict(state='live', status=dict(state='working', app='pi'))) as hc:
-            self.assertEqual('waiting', c.notify_pm(self.store, 'one'))
-            self.assertEqual(1, hc.call_count)
+    @patch.object(runtime,'connected_scopes',return_value=['core:test'])
+    def test_unknown_delivery_and_blocked_terminal_never_auto_retry(self,scopes):
+        post=self.post()['postId']
         def uncertain(args):
-            if args[0] == 'send':
-                raise ProjectError('Timeout after sending')
+            if args[0]=='send':raise ProjectError('response lost')
             return self.terminal(args)
-        with patch.object(runtime, 'hc', side_effect=uncertain):
-            self.assertEqual('uncertain', c.notify_pm(self.store, 'one'))
-        with patch.object(runtime, 'hc') as hc:
-            self.assertEqual('quiet', c.notify_pm(self.store, 'one'))
-            hc.assert_not_called()
-        self.assertEqual('uncertain', self.entries()[0]['state'])
+        with patch.object(runtime,'hc',side_effect=uncertain):self.assertEqual('uncertain',board.deliver(self.store,'one',post,self.worker)[0]['state'])
+        with patch.object(runtime,'hc') as hc:
+            self.assertEqual('uncertain',board.deliver(self.store,'one',post,self.worker)[0]['state']);hc.assert_not_called()
+        post=board.post(self.store,'one',dict(requestId='q2',workItemId='work',text='Question',recipients=['pm']),self.worker)['postId']
+        with patch.object(runtime,'hc',return_value=dict(state='live',status=dict(state='blocked',app='pi'))) as hc:
+            self.assertEqual('unavailable',board.deliver(self.store,'one',post,self.worker)[0]['state']);self.assertEqual(1,hc.call_count)
 
-    def test_crash_reservation_recovers_as_uncertain(self):
+    def test_workers_cannot_assign_accept_or_post_as_peers(self):
+        for override in [dict(kind='assignment'),dict(workItemId='peer'),dict(recipients=['all']),dict(artifactRefs=['missing'])]:
+            request=dict(requestId='bad',workItemId='work',text='Text',recipients=['pm']);request.update(override)
+            with self.assertRaises(ProjectError):board.post(self.store,'one',request,self.worker)
+        request=dict(requestId='valid',workItemId='work',text='Fact',recipients=['pm'])
+        first=board.post(self.store,'one',request,self.worker)
+        self.assertEqual(first['postId'],board.post(self.store,'one',request,self.worker)['postId'])
+        with self.assertRaises(ProjectError):board.post(self.store,'one',dict(request,text='changed'),self.worker)
+
+    @patch.object(runtime,'connected_scopes',return_value=['core:test'])
+    def test_handoff_keeps_history_and_new_pm_derives_attention(self,scopes):
+        self.report(kind='submitted');history=board.read(self.store,'one')
+        with patch.object(runtime,'hc',side_effect=self.terminal):onboarding.bind(self.store,'t4','core:test','one',replace_generation=1)
+        self.assertEqual(history,board.read(self.store,'one'))
+        self.assertEqual('review',board.attention(self.store.get('one'))['items'][0]['status'])
+        with self.assertRaises(ProjectError):self.apply('project.update',summary='Old PM')
+        self.assertEqual([],c.inbox(self.store,'one')['entries'])
+
+    def test_service_only_runs_due_checkpoints_not_generic_reports(self):
         self.report(kind='submitted')
-        self.store.db.execute("UPDATE inbox SET state='sending'")
-        c.recover_sends(self.store)
-        self.assertEqual('uncertain', self.entries()[0]['state'])
+        with self.store.transaction():
+            p=self.store.get('one');p['configuration']['followup']['enabled']=True;self.store.save(p)
+        with patch.object(runtime,'hc') as hc:
+            result=c.service_tick(self.store);self.assertEqual(0,result['one']['checkpoints']);hc.assert_not_called()
 
-    @patch.object(runtime, 'connected_scopes', return_value=['core:test'])
-    def test_handoff_keeps_events_and_rejects_old_pm(self, scopes):
-        self.report(kind='submitted')
-        event = self.entries()[0]['id']
-        self.apply('inbox.acknowledge', ids=[event])
-        with patch.object(runtime, 'hc', side_effect=self.terminal):
-            onboarding.bind(self.store, 't3', 'core:test', 'one', replace_generation=1)
-        self.assertEqual('queued', self.entries()[0]['state'])
-        with self.assertRaises(ProjectError):
-            self.apply('inbox.handle', ids=[event], note='Old PM')
-        p = self.store.get('one')
-        self.main.update(generation=p['main']['generation'], token=p['main']['token'])
-        self.apply('inbox.acknowledge', ids=[event])
-        self.apply('inbox.handle', ids=[event], note='New PM verified the report')
-        self.assertEqual([], self.entries())
-
-    def test_inbox_pagination_keeps_every_event(self):
-        self.report(kind='blocked')
-        self.report('second', kind='failed')
-        first = c.inbox(self.store, 'one', limit=1)
-        second = c.inbox(self.store, 'one', after=first['nextAfter'], limit=1)
-        self.assertEqual(2, first['pending'])
-        self.assertNotEqual(first['entries'][0]['id'], second['entries'][0]['id'])
-        self.assertIsNone(second['nextAfter'])
-
-    def test_disabled_service_does_not_call_core(self):
-        with patch.object(runtime, 'hc') as hc:
-            self.assertEqual({}, c.service_tick(self.store))
-            hc.assert_not_called()
+    def test_closed_business_state_leaves_history_without_pending_messages(self):
+        self.report(kind='question',question=dict(text='Q',recipient='pm'))
+        self.apply('item.update',id='work',waitingOn=None,question=None)
+        self.assertEqual([],board.attention(self.store.get('one'))['items'])
+        self.assertTrue(any(e['kind']=='question' for e in board.read(self.store,'one')['entries']))
 
 
-if __name__ == '__main__':
-    unittest.main()
+if __name__=='__main__':unittest.main()

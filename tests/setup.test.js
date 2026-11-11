@@ -4,7 +4,7 @@ import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
 
 const turn=()=>new Promise(resolve=>setImmediate(resolve));
-const probe={capabilities:['leader-bind','core-command-discovery','pm-configuration','guided-setup','artifact-bundles']};
+const probe={capabilities:['leader-bind','core-command-discovery','pm-configuration','guided-setup','artifact-bundles','native-agent-status','core-collaboration']};
 function element(){const target={nodes:[],events:{},child(x){this.nodes.push(x);return proxy;},children(xs){this.nodes.push(...xs);return proxy;},when(on,f){if(on)f(proxy);return proxy;},id(x){this.key=x;return proxy;}};
  const proxy=new Proxy(target,{get:(t,k)=>k in t?typeof t[k]==='function'?t[k].bind(t):t[k]:(...args)=>{if(k==='on_click')t.events.click=args[0];return proxy;}});return proxy;}
 function find(root,key){if(root?.key===key)return root;for(const n of root?.nodes||[]){const r=find(n,key);if(r)return r;}return null;}

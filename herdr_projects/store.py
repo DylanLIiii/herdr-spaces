@@ -140,8 +140,10 @@ class Store:
         binding = bindings[0] if bindings else None
         project = next((p for p in projects if binding and p['id'] == binding['project_id']), None)
         if project:
-            from .coordination import inbox, service_status
-            project['inbox'] = inbox(self, project['id'])
+            from .coordination import service_status
+            from .collaboration import read, attention
+            project['collaboration'] = read(self, project['id'])
+            project['attention'] = attention(project)
             if project.get('configuration', {}).get('followup', {}).get('enabled'):
                 service = service_status(self)
                 project['coordination'] = dict(live=service.get('live', False), lastCheckAt=service.get('lastCheckAt'),
@@ -186,6 +188,14 @@ class Store:
             p['revision'] += 1
             self.save(p)
             self.event(p, request['requestId'], digest, p['main']['id'], request)
+            if request.get('op') in ('todo.promote', 'artifact.review', 'artifact.disposition', 'decision.add'):
+                from .collaboration import record
+                aid = request.get('id') if request['op'].startswith('artifact.') else None
+                artifact = next((a for a in p['artifacts'] if a['id']==aid), None)
+                record(self, p, 'assignment' if request['op']=='todo.promote' else 'decision',
+                       dict(text=request.get('note') or request.get('text') or request.get('brief'), operation=request['op']),
+                       artifact['workItemId'] if artifact else request.get('id') if request['op']=='todo.promote' else None,
+                       artifact_refs=[aid] if artifact else request.get('artifactRefs', []))
             return dict(replayed=False, project=self.public(p))
 
     @staticmethod
@@ -436,13 +446,14 @@ class Store:
                 item['status'] = 'review'
             item.update({key: value for key, value in fields.items() if key != 'kind'})
             item['lastProgressAt'] = report['at']
-            enqueue(self, p, fields['kind'], report, item['id'], run['id'],
+            post_id = enqueue(self, p, fields['kind'], report, item['id'], run['id'],
                     event_id='event-' + hashlib.sha256((project_id + ':' + run['id'] + ':' + request['requestId']).encode()).hexdigest()[:32])
+            self.db.execute('UPDATE collaboration SET artifact_refs=? WHERE id=?', (json.dumps(item['artifactIds']), post_id))
             item.update(revision=item['revision'] + 1, updatedAt=now(), updatedBy=run['id'])
             p['revision'] += 1
             self.save(p)
             self.event(p, request['requestId'], digest, run['id'], request)
-            return dict(replayed=False, project=self.public(p))
+            return dict(replayed=False, project=self.public(p), postId=post_id)
 
     def history(self, project_id):
         self.get(project_id)

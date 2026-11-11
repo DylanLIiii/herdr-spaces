@@ -1,10 +1,10 @@
 """Additive, transactional ledger migrations. Never infer business completion."""
 import json
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 CAPABILITIES = ['leader-bind', 'guarded-introduction', 'core-command-discovery',
                 'pm-configuration', 'coordination-inbox', 'structured-reports',
-                'guided-setup', 'role-teams', 'isolated-workspaces', 'artifact-bundles', 'research-contracts']
+                'guided-setup', 'role-teams', 'isolated-workspaces', 'artifact-bundles', 'research-contracts', 'native-agent-status', 'core-collaboration']
 
 
 def project_defaults(project):
@@ -37,7 +37,7 @@ def migrate(db):
     db.execute('BEGIN IMMEDIATE')
     try:
         version = db.execute('PRAGMA user_version').fetchone()[0]
-        if version not in (0, 1, SCHEMA_VERSION):
+        if version not in (0, 1, 2, SCHEMA_VERSION):
             from .store import ProjectError
             raise ProjectError(f'Unsupported ledger schema {version}; do not downgrade this installation')
         for sql in (
@@ -60,6 +60,16 @@ def migrate(db):
             'CREATE INDEX IF NOT EXISTS inbox_pending ON inbox(project_id,state,seq)',
             '''CREATE TABLE IF NOT EXISTS service_state(
                name TEXT PRIMARY KEY, body TEXT NOT NULL)''',
+            '''CREATE TABLE IF NOT EXISTS collaboration(
+               seq INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT UNIQUE NOT NULL,
+               project_id TEXT NOT NULL REFERENCES projects(id), work_item_id TEXT, run_id TEXT,
+               kind TEXT NOT NULL, body TEXT NOT NULL, author TEXT NOT NULL,
+               recipients TEXT NOT NULL, artifact_refs TEXT NOT NULL, created_at TEXT NOT NULL)''',
+            'CREATE INDEX IF NOT EXISTS collaboration_project ON collaboration(project_id,work_item_id,seq)',
+            '''CREATE TABLE IF NOT EXISTS deliveries(
+               post_id TEXT NOT NULL REFERENCES collaboration(id), recipient TEXT NOT NULL,
+               state TEXT NOT NULL, terminal TEXT, generation INTEGER, at TEXT NOT NULL, error TEXT,
+               PRIMARY KEY(post_id,recipient))''',
         ):
             db.execute(sql)
         if version < SCHEMA_VERSION:

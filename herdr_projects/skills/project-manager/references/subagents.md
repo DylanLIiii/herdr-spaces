@@ -15,13 +15,13 @@
 | research | Feynman 多来源研究或有限实验 | 使用自身工作流 |
 | oracle | 只读困难决策分析 | apex |
 
-PM 维护目标、优先级、依赖和验收，也负责角色选择、派工、解阻塞及交接。子代理仅执行自己的范围。一个任务由一个 Run 承担；已有执行不明时先核对，不重复启动。
+PM 维护目标、优先级、依赖和验收，也负责角色选择、派工、解阻塞及交接。子代理仅执行自己的范围；可与同项目 Worker/Reviewer 通过 `hc send` 直接核对事实和局部返工。等待用 `hc wait`，关键依据用 `post --file JSON --notify` 挂到自己任务，recipients 使用明确 Run id 或 pm。回复可带 replyTo、引用可带 artifactRefs。不广播，不把同级消息当成扩大范围或递归派工授权。一个任务由一个 Run 承担；已有执行不明时先核对，不重复启动。
 
 ## 工具与隔离
 
 支持 Pi、Claude Code、Codex、OpenCode、Feynman。实际 argv 由适配器生成并记录在 Run；单次可用 `--backend` / `--model` 覆盖。Coding Hub 路由按角色难度使用 Pi / OpenCode 的 group 路由，direct 使用工具模型。只有 Pi 程序不存在且已配置 OpenCode 后备时才自动切换；等待权限或启动结果不明不切换。
 
-Codex 使用 `--no-daemon`，OpenCode 使用独立 server 的 mini 交互界面，Feynman 使用新会话及指定研究 workflow。保留原工具权限与认证；凭据不写入账本或 argv。
+Codex 使用 `--no-daemon`，OpenCode 使用独立 server 的 mini 交互界面和绑定当前 Run 的原生事件状态适配器，Feynman 使用新会话及指定研究 workflow。Worker 通过 hc 的 parent 关系归属于 PM，默认不创建额外 Tab，原生通知保持启用。保留原工具权限与认证；凭据不写入账本或 argv。
 
 新团队的 Worker 默认独立 worktree，记录 baseCommit 和分支；未提交改动不会复制。旧默认使用项目 cwd，但同目录不能有第二个存活或不明的写手。Research 在独立持久输出目录工作，参考仓库路径另行提供。只读角色是行为契约，不是系统权限沙箱。
 

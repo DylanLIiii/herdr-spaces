@@ -1,5 +1,6 @@
 """Portable role templates and validated execution preferences (no credentials)."""
 import copy
+import os
 from pathlib import Path
 import shutil
 
@@ -19,6 +20,18 @@ ROLE_GUIDANCE = {
     'research': 'Investigate the assigned decision, preserve sources, drafts and provenance, and distinguish facts from inference.',
     'oracle': 'Analyze difficult decisions read-only. State evidence, uncertainty and a minimal validation plan.',
 }
+
+
+def executable(backend):
+    found = shutil.which(backend)
+    if found:
+        return found
+    # Official OpenCode installer location; background Core shells may omit it.
+    if backend == 'opencode':
+        candidate = Path.home() / '.opencode/bin/opencode'
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            return str(candidate)
+    return None
 
 
 def template(name='development', routing='direct', backend='pi', model=None):
@@ -121,7 +134,7 @@ def resolve(project, role='worker', backend=None, model=None, tier=None):
     # The only automatic fallback happens BEFORE any process has been launched.
     requested_backend = profile['backend']
     fallback_reason = None
-    if not shutil.which(requested_backend) and profile.get('fallback') and shutil.which(profile['fallback']):
+    if not executable(requested_backend) and profile.get('fallback') and executable(profile['fallback']):
         profile['backend'] = profile['fallback']
         profile['model'] = None
         fallback_reason = f'{requested_backend} is not installed; using configured fallback'
@@ -136,6 +149,6 @@ def resolve(project, role='worker', backend=None, model=None, tier=None):
 
 def capabilities():
     # No model calls or reading credentials. Unknown stays unknown until checked.
-    return [dict(id=backend, installed=bool(shutil.which(backend)), executable=shutil.which(backend),
+    return [dict(id=backend, installed=bool(executable(backend)), executable=executable(backend),
                  authentication='unverified', model='unverified', reporting='unverified',
                  researchSearch='unverified' if backend == 'feynman' else 'not-applicable') for backend in BACKENDS]

@@ -24,7 +24,7 @@ class WorkspaceTests(unittest.TestCase):
         self.identity = dict(project='p', main=p['main']['id'], generation=1, role='main', token='test')
         with self.store.transaction():
             p = self.store.get('p')
-            p['main'].update(state='running', generation=1, token='test', scope='core:test')
+            p['main'].update(state='running', generation=1, token='test', scope='core:test', terminal='t1')
             p['configuration'] = teams.validate(teams.template('mixed')) | dict(revision=1, history=[])
             self.store.save(p)
         self.counter = 0
@@ -100,7 +100,7 @@ class WorkspaceTests(unittest.TestCase):
         self.assertEqual('exited', p['runs'][0]['state'])
         self.assertEqual('blocked', p['items'][0]['status'])
         self.assertEqual('No disk space', p['runs'][0]['error'])
-        self.assertEqual(1, self.store.db.execute('SELECT COUNT(*) FROM inbox').fetchone()[0])
+        self.assertEqual(1, self.store.db.execute("SELECT COUNT(*) FROM collaboration WHERE kind='failed'").fetchone()[0])
 
     def test_changed_input_version_cannot_be_consumed_by_a_new_run(self):
         self.task('source-task')
