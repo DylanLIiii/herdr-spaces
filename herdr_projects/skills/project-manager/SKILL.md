@@ -21,7 +21,7 @@ description: 维护 Herdr Spaces 项目账本，配置和协调 SubAgent，核�
 
 1. 从 `show` 读取完整目标、任务、依赖、SubAgent 配置、执行历史与证据。从 `pmPath` 读取叙述记录。
 2. 将用户目标转为有来源的待办。使用 `todo.add` 登记，用 `todo.promote` 补齐范围和可验证完成标准，保留原任务 id。
-3. 用 `item.update` 维护下一步、依赖和 checklist。一个任务由一个执行负责写入；并行写入同一仓库前需要隔离 worktree 或明确互不重叠的范围。
+3. 用 `item.update` 维护下一步、依赖和 checklist。一个任务由一个执行负责写入；每个写任务必须使用独立 worktree；互不重叠的文件范围不能替代工作区隔离。
 4. 在目标、决策、阻塞或证据发生实质变化时更新账本。不要建立竞争的任务状态表。
 
 ## 写入协议

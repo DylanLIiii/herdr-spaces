@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.2
+
+- Require an isolated worktree for every new writing Worker, including legacy preferences and lower-level launch calls; existing executions remain unchanged.
+- Clear native status when the OpenCode event stream closes or fails, and prevent a late snapshot from reviving stale activity.
+- Add setup-level status lifecycle regression tests, an exact production standalone-mini smoke test with a loopback deterministic model, and actual target-project installation comparisons.
+
 ## 0.4.1
 
 - Launch Workers as real Herdr Core children with native lifecycle notifications; retain explicit outlive-parent behavior for PM handoff and use native Agent navigation.

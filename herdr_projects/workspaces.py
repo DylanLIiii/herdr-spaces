@@ -1,6 +1,5 @@
 """One writer per checkout; isolated worktrees and durable research directories."""
 import hashlib
-import json
 from pathlib import Path
 import subprocess
 
@@ -24,20 +23,12 @@ def artifact_root(store, project):
 
 
 def check_writer(store, project, profile):
-    if profile['role'] != 'worker' or profile['isolation'] != 'project':
-        return
-    cwd = str(Path(project['cwd']).resolve())
-    for row in store.db.execute('SELECT body FROM projects'):
-        other = json.loads(row[0])
-        for run in other['runs']:
-            if run['state'] not in ('starting', 'running', 'uncertain'):
-                continue
-            execution = run.get('execution', {})
-            if execution.get('role', 'worker') == 'worker' and str(Path(run.get('cwd', other['cwd'])).resolve()) == cwd:
-                raise ProjectError('This checkout already has a live/uncertain writer. Use an isolated worktree or reconcile the existing run.')
+    if profile['role'] == 'worker' and profile.get('isolation') != 'worktree':
+        raise ProjectError('Every writing Worker requires an isolated worktree; project-cwd execution is not supported')
 
 
 def prepare(store, project, run, profile):
+    check_writer(store, project, profile)
     base = store.home / 'projects' / project['id'] / 'runs' / run['id']
     output = artifact_root(store, project) / 'work' / run['id']
     output.mkdir(parents=True, exist_ok=True)

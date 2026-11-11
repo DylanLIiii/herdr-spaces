@@ -1,0 +1,367 @@
+{
+  "project": "project-e9d5e3b56bea4b38",
+  "beforeSchema": 2,
+  "afterSchema": 3,
+  "version": "0.4.1",
+  "before": {
+    "project": "project-e9d5e3b56bea4b38",
+    "main": {
+      "id": "main-e9ad16a1ee0e4a65",
+      "terminal": "t1",
+      "scope": "core:b215daa3a22fb5a412092c0d8fa64864",
+      "generation": 1,
+      "mode": "attached"
+    },
+    "revision": 154,
+    "items": [
+      {
+        "id": "work-review-pr40",
+        "status": "accepted",
+        "activeRunId": "run-7570f11ef180495e"
+      },
+      {
+        "id": "work-fix-issue39",
+        "status": "accepted",
+        "activeRunId": "run-f4ef5dcae79f487f"
+      },
+      {
+        "id": "work-acp-discovery",
+        "status": "cancelled",
+        "activeRunId": null
+      },
+      {
+        "id": "work-reference-integration",
+        "status": "accepted",
+        "activeRunId": "run-3a3df75bb5494ca5"
+      },
+      {
+        "id": "work-feature-improvements",
+        "status": "accepted",
+        "activeRunId": "run-25013d90f3954cd0"
+      },
+      {
+        "id": "work-baseline-smoke-routing",
+        "status": "open",
+        "activeRunId": null
+      },
+      {
+        "id": "work-fix-pr40-followup",
+        "status": "accepted",
+        "activeRunId": "run-4dc4622f63c847e2"
+      }
+    ],
+    "runs": [
+      {
+        "id": "run-abae3e4ba427402e",
+        "terminal": "t6",
+        "state": "exited",
+        "parentTerminal": null,
+        "reportIds": []
+      },
+      {
+        "id": "run-7570f11ef180495e",
+        "terminal": "t7",
+        "state": "running",
+        "parentTerminal": null,
+        "reportIds": [
+          "report-pr40-review-progress-1",
+          "report-pr40-review-final-a46f17f",
+          "report-pr40-review-final-a46f17f-v2"
+        ]
+      },
+      {
+        "id": "run-f4ef5dcae79f487f",
+        "terminal": "t8",
+        "state": "exited",
+        "parentTerminal": null,
+        "reportIds": [
+          "report-issue39-checkpoint-1"
+        ]
+      },
+      {
+        "id": "run-2be6976ad3704340",
+        "terminal": "t9",
+        "state": "exited",
+        "parentTerminal": null,
+        "reportIds": []
+      },
+      {
+        "id": "run-3a3df75bb5494ca5",
+        "terminal": "t10",
+        "state": "running",
+        "parentTerminal": null,
+        "reportIds": [
+          "report-reference-integration-3a3df75bb5494ca5"
+        ]
+      },
+      {
+        "id": "run-25013d90f3954cd0",
+        "terminal": "t11",
+        "state": "exited",
+        "parentTerminal": null,
+        "reportIds": [
+          "report-feature-progress-1",
+          "report-feature-progress-2",
+          "report-feature-final-pr41"
+        ]
+      },
+      {
+        "id": "run-4dc4622f63c847e2",
+        "terminal": "t12",
+        "state": "running",
+        "parentTerminal": null,
+        "reportIds": [
+          "report-pr40-followup-progress-1",
+          "report-pr40-followup-final-nochange"
+        ]
+      }
+    ],
+    "artifactIds": [
+      "evidence-pr40-independent-review-a46f17f",
+      "evidence-pr40-independent-review-a46f17f-v2",
+      "evidence-reference-integration-3a3df75bb5494ca5",
+      "evidence-pr40-followup-nochange-a46f17f",
+      "evidence-feature-pr41-7464480aa7631a19f1608de7271c32da7e7d4190",
+      "evidence-main-feature-pr41-836e28e-v2",
+      "evidence-main-issue39-pr42-d1f55d1-v1",
+      "evidence-pr42-conflicts-2c0151b-v2"
+    ],
+    "decisionIds": [
+      "decision-4efbdc4a63bb4397",
+      "decision-f0db73efb88d4576",
+      "decision-e651cd218baa44ae",
+      "decision-1b6b1fbb49a548d1",
+      "decision-138eaf1f47ee47f7",
+      "decision-94a93d0477154824",
+      "decision-00df9695afff4339",
+      "decision-f272fcd039ec47ca",
+      "decision-8ea1e49fbbba4e2f",
+      "decision-cc2b454156124f98",
+      "decision-793378a1b9794bab",
+      "decision-86c211a0de414919"
+    ]
+  },
+  "after": {
+    "project": "project-e9d5e3b56bea4b38",
+    "main": {
+      "id": "main-e9ad16a1ee0e4a65",
+      "terminal": "t1",
+      "scope": "core:b215daa3a22fb5a412092c0d8fa64864",
+      "generation": 1,
+      "mode": "attached"
+    },
+    "revision": 154,
+    "items": [
+      {
+        "id": "work-review-pr40",
+        "status": "accepted",
+        "activeRunId": "run-7570f11ef180495e"
+      },
+      {
+        "id": "work-fix-issue39",
+        "status": "accepted",
+        "activeRunId": "run-f4ef5dcae79f487f"
+      },
+      {
+        "id": "work-acp-discovery",
+        "status": "cancelled",
+        "activeRunId": null
+      },
+      {
+        "id": "work-reference-integration",
+        "status": "accepted",
+        "activeRunId": "run-3a3df75bb5494ca5"
+      },
+      {
+        "id": "work-feature-improvements",
+        "status": "accepted",
+        "activeRunId": "run-25013d90f3954cd0"
+      },
+      {
+        "id": "work-baseline-smoke-routing",
+        "status": "open",
+        "activeRunId": null
+      },
+      {
+        "id": "work-fix-pr40-followup",
+        "status": "accepted",
+        "activeRunId": "run-4dc4622f63c847e2"
+      }
+    ],
+    "runs": [
+      {
+        "id": "run-abae3e4ba427402e",
+        "terminal": "t6",
+        "state": "exited",
+        "parentTerminal": null,
+        "reportIds": []
+      },
+      {
+        "id": "run-7570f11ef180495e",
+        "terminal": "t7",
+        "state": "running",
+        "parentTerminal": null,
+        "reportIds": [
+          "report-pr40-review-progress-1",
+          "report-pr40-review-final-a46f17f",
+          "report-pr40-review-final-a46f17f-v2"
+        ]
+      },
+      {
+        "id": "run-f4ef5dcae79f487f",
+        "terminal": "t8",
+        "state": "exited",
+        "parentTerminal": null,
+        "reportIds": [
+          "report-issue39-checkpoint-1"
+        ]
+      },
+      {
+        "id": "run-2be6976ad3704340",
+        "terminal": "t9",
+        "state": "exited",
+        "parentTerminal": null,
+        "reportIds": []
+      },
+      {
+        "id": "run-3a3df75bb5494ca5",
+        "terminal": "t10",
+        "state": "running",
+        "parentTerminal": null,
+        "reportIds": [
+          "report-reference-integration-3a3df75bb5494ca5"
+        ]
+      },
+      {
+        "id": "run-25013d90f3954cd0",
+        "terminal": "t11",
+        "state": "exited",
+        "parentTerminal": null,
+        "reportIds": [
+          "report-feature-progress-1",
+          "report-feature-progress-2",
+          "report-feature-final-pr41"
+        ]
+      },
+      {
+        "id": "run-4dc4622f63c847e2",
+        "terminal": "t12",
+        "state": "running",
+        "parentTerminal": null,
+        "reportIds": [
+          "report-pr40-followup-progress-1",
+          "report-pr40-followup-final-nochange"
+        ]
+      }
+    ],
+    "artifactIds": [
+      "evidence-pr40-independent-review-a46f17f",
+      "evidence-pr40-independent-review-a46f17f-v2",
+      "evidence-reference-integration-3a3df75bb5494ca5",
+      "evidence-pr40-followup-nochange-a46f17f",
+      "evidence-feature-pr41-7464480aa7631a19f1608de7271c32da7e7d4190",
+      "evidence-main-feature-pr41-836e28e-v2",
+      "evidence-main-issue39-pr42-d1f55d1-v1",
+      "evidence-pr42-conflicts-2c0151b-v2"
+    ],
+    "decisionIds": [
+      "decision-4efbdc4a63bb4397",
+      "decision-f0db73efb88d4576",
+      "decision-e651cd218baa44ae",
+      "decision-1b6b1fbb49a548d1",
+      "decision-138eaf1f47ee47f7",
+      "decision-94a93d0477154824",
+      "decision-00df9695afff4339",
+      "decision-f272fcd039ec47ca",
+      "decision-8ea1e49fbbba4e2f",
+      "decision-cc2b454156124f98",
+      "decision-793378a1b9794bab",
+      "decision-86c211a0de414919"
+    ]
+  },
+  "checks": {
+    "stableMain": true,
+    "sameGeneration": true,
+    "priorRunsRetained": true,
+    "priorArtifactsRetained": true,
+    "priorDecisionsRetained": true
+  },
+  "currentCore": [
+    {
+      "runId": "run-abae3e4ba427402e",
+      "address": "t6",
+      "state": "finished",
+      "parent": null,
+      "pid": 56244,
+      "reported": false,
+      "created_ms": 1794392202196,
+      "exit_code": 1
+    },
+    {
+      "runId": "run-7570f11ef180495e",
+      "address": "t7",
+      "state": "live",
+      "parent": null,
+      "pid": 57089,
+      "reported": false,
+      "created_ms": 1794392302925,
+      "exit_code": null
+    },
+    {
+      "runId": "run-f4ef5dcae79f487f",
+      "address": "t8",
+      "state": "finished",
+      "parent": null,
+      "pid": 57187,
+      "reported": false,
+      "created_ms": 1794392312211,
+      "exit_code": null
+    },
+    {
+      "runId": "run-2be6976ad3704340",
+      "address": "t9",
+      "state": "finished",
+      "parent": null,
+      "pid": 57204,
+      "reported": false,
+      "created_ms": 1794392312435,
+      "exit_code": null
+    },
+    {
+      "runId": "run-3a3df75bb5494ca5",
+      "address": "t10",
+      "state": "live",
+      "parent": null,
+      "pid": 57220,
+      "reported": false,
+      "created_ms": 1794392312671,
+      "exit_code": null
+    },
+    {
+      "runId": "run-25013d90f3954cd0",
+      "address": "t11",
+      "state": "finished",
+      "parent": null,
+      "pid": 71739,
+      "reported": false,
+      "created_ms": 1794393977926,
+      "exit_code": null
+    },
+    {
+      "runId": "run-4dc4622f63c847e2",
+      "address": "t12",
+      "state": "live",
+      "parent": null,
+      "pid": 75031,
+      "reported": false,
+      "created_ms": 1794394382893,
+      "exit_code": null
+    }
+  ],
+  "installedHashes": {
+    "herdr_projects/teams.py": "82f90d35e218f173024276752fa365d0681502734ce3279bc3f13c3d34ddacec",
+    "herdr_projects/workspaces.py": "a24745f0e1634fedc453f91fb4d43b7dea7809090539fec015e8f7dcf76b1077",
+    "herdr_projects/integrations/opencode-status/index.js": "a3f3a6865f97ea8753a5b54272da5eb7ee26dd946a80f835d041522366fda5d1"
+  },
+  "scope": "Actual ts-mini project. No terminal restart or parent mutation requested."
+}

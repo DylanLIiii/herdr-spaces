@@ -23,7 +23,7 @@ PM 维护目标、优先级、依赖和验收，也负责角色选择、派工�
 
 Codex 使用 `--no-daemon`，OpenCode 使用独立 server 的 mini 交互界面和绑定当前 Run 的原生事件状态适配器，Feynman 使用新会话及指定研究 workflow。Worker 通过 hc 的 parent 关系归属于 PM，默认不创建额外 Tab，原生通知保持启用。保留原工具权限与认证；凭据不写入账本或 argv。
 
-新团队的 Worker 默认独立 worktree，记录 baseCommit 和分支；未提交改动不会复制。旧默认使用项目 cwd，但同目录不能有第二个存活或不明的写手。Research 在独立持久输出目录工作，参考仓库路径另行提供。只读角色是行为契约，不是系统权限沙箱。
+新团队的 Worker 默认独立 worktree，记录 baseCommit 和分支；未提交改动不会复制。旧配置在下一次派发写任务时也解析为独立 worktree；已有执行目录不变。Research 在独立持久输出目录工作，参考仓库路径另行提供。只读角色是行为契约，不是系统权限沙箱。
 
 `worker --project PROJECT --item TASK --revision REV --role ROLE` 使用冻结的角色配置；`--tier` 可覆盖难度。自定义 `--command-json` 必须包含一个独立 `{context}`，直接传 argv、不经 shell；实际工具与模型以该命令为准，不能声称命中了默认模型。
 

@@ -1,6 +1,6 @@
 # Herdr Spaces
 
-0.4.1 优先使用 Herdr Core 原生子终端、状态、消息和导航。升级与边界见 [原生集成说明](docs/native-core-integration.md)。
+0.4.2 优先使用 Herdr Core 原生子终端、状态、消息和导航。升级与边界见 [原生集成说明](docs/native-core-integration.md)。
 
 Herdr 的原生项目侧栏，以及由本项目 Main 维护的持久账本。每个 Project 有且只有一个稳定 Main 身份；Main 和 Workers 运行在 Pi、Claude Code、Codex 等现有终端界面中。没有新的聊天界面。
 
@@ -22,7 +22,7 @@ Herdr 的原生项目侧栏，以及由本项目 Main 维护的持久账本。�
 
 ## 安装
 
-项目机器需要 Linux 或 macOS、Python 3.10+ 和 `hc`；桌面机器还需要支持远程 `exec({on})` 的 Herdr App。验证版本为 Herdr App 0.1.14 / hc 0.1.19。运行没有 pip/npm 依赖；Node 仅用于开发测试。新团队配置支持 Worker worktree 隔离和 Coding Hub 角色/路由预设；旧项目保持原 cwd 配置并限制同目录单写手。真实模型与研究检索能力须按目标机器验证。
+项目机器需要 Linux 或 macOS、Python 3.10+ 和 `hc`；桌面机器还需要支持远程 `exec({on})` 的 Herdr App。验证版本为 Herdr App 0.1.14 / hc 0.1.19。运行没有 pip/npm 依赖；Node 仅用于开发测试。新团队配置支持 Worker worktree 隔离和 Coding Hub 角色/路由预设；旧配置在后续派发写任务时也使用独立 worktree，已运行的任务目录保持不变。真实模型与研究检索能力须按目标机器验证。
 
 ```sh
 git clone https://github.com/DylanLIiii/herdr-spaces.git
@@ -168,7 +168,7 @@ python3 scripts/native_smoke.py --app /absolute/path/to/herdr-app
 
 `workflow_smoke.py` 使用独立 Core、账本和确定性 PM/Research 程序验证配置、后台服务重启、交接、产物核验及后续任务；可在 macOS / Linux 运行，带 `--app` 时检查真实原生窗口，Linux 需要 Xvfb。它不调用模型。
 
-运行程序与安装器均包含在本仓库中。使用 `python3 scripts/package.py` 可生成 `dist/herdr-spaces-0.4.1.tar.gz` 安装归档。0.4.1 使用 SQLite schema 3，旧运行程序会拒绝打开升级后的库；升级前用 SQLite backup API 保存备份，保留数据路径，先安装独立预览布局。远端设置会按能力探测准备新版本。
+运行程序与安装器均包含在本仓库中。使用 `python3 scripts/package.py` 可生成 `dist/herdr-spaces-0.4.2.tar.gz` 安装归档。0.4.2 使用 SQLite schema 3，旧运行程序会拒绝打开升级后的库；升级前用 SQLite backup API 保存备份，保留数据路径，先安装独立预览布局。远端设置会按能力探测准备新版本。
 
 ## 许可
 

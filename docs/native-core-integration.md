@@ -1,4 +1,4 @@
-# Native Core integration (0.4.1)
+# Native Core integration (0.4.2)
 
 ## Responsibility and observed defect
 
@@ -42,3 +42,11 @@ Schema 3 adds collaboration and delivery tables; schema 1/2 business records, id
 Existing mini processes did not inherit the status adapter and cannot gain a Core parent through a public hot-update API. Do not restart them to manufacture a green status. New runs use the corrected integration. Native UI describes unreported status accurately and opens live terminals through `agent.focus`; previous attempts are separated from current owners.
 
 Sources: https://herdr.dev/core/#agents ; https://github.com/herdrdev/herdr-core/blob/main/docs/commands.md ; OpenCode v2.2.7 `packages/tui/src/context/program-status.ts`, `packages/schema/src/session-status-event.ts`, `packages/plugin/src/promise/plugin.ts`. Antigravity https://antigravity.google/docs/swarm/ informed the distinction between shared collaboration records and directed wakeups; its transport/runtime is not copied.
+
+## Audit follow-up in 0.4.2
+
+Every new writing Worker requires an isolated Git worktree. Old project-cwd preferences are resolved to worktree for the next launch without mutating existing Runs; configuration validation and the lower-level launch/preparation guard both reject unisolated writing. A repository without a usable HEAD reports a preparation failure instead of falling back to the shared directory.
+
+The OpenCode event subscription clears OSC status on normal exhaustion, failure and teardown. Late snapshots cannot revive a closed subscription. Four setup-level lifecycle tests reproduce the original failures and verify the correction.
+
+`production_mini_smoke.py` runs the exact production manager/start/_run/standalone-mini chain against a loopback deterministic HTTP model. It observes Core parent linkage and working/done/error transitions; no paid provider receives requests. Permission/question mappings remain covered by native-event tests rather than claimed as end-to-end model interaction. See `docs/native-core-audit/production-mini.json`. Original v0.4.0 parent failure and status lifecycle failure logs are retained in that directory. Actual ts-mini before/after snapshots are allowlisted, retaining identities, Run/report ids, artifact ids and Core states without credentials or prompts.

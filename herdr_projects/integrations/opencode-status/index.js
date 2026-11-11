@@ -55,25 +55,31 @@ export default {
     const root=process.env.HERDR_SPACES_SESSION_ID,tty=process.env.HERDR_SPACES_STATUS_TTY;
     if(!root||!tty||!process.env.HERDR_RUN_ID)return;
     const fd=openSync(tty,'w'),state=tracker(root),abort=new AbortController();
-    let closed=false,last='';
+    let closed=false,streamEnded=false,last='';
     const send=status=>{const output=frame(status);if(!closed&&output&&output!==last){writeSync(fd,output);last=output;}};
+    const cleanup=()=>{if(closed)return;try{send({state:'clear'});}finally{closed=true;abort.abort();closeSync(fd);}};
+    const endStream=()=>{streamEnded=true;cleanup();};
     // Subscribe before reading a snapshot; if an event wins, do not overwrite it
     // with older state from the snapshot request.
     let events=0;
-    const stream=ctx.event.subscribe({signal:abort.signal});
     const running=(async()=>{
-      try{for await(const event of stream){if(closed)break;const status=state.apply(event);if(status){events++;send(status);}}}
-      catch{if(!closed)send({state:'clear'});}
+      try{
+        const stream=ctx.event.subscribe({signal:abort.signal});
+        for await(const event of stream){if(closed)break;const status=state.apply(event);if(status){events++;send(status);}}
+      }catch{/* Loss of observation clears status; it is not an Agent failure. */}
+      finally{endStream();}
     })();
+    if(streamEnded)return cleanup;
     try{
       const info=await ctx.session.get({sessionID:root});
       const permissions=await ctx.permission.list({sessionID:root});
-      if(!closed&&!events){
+      if(!closed&&!streamEnded&&!events){
         state.seed(info);
         for(const permission of permissions)state.apply({type:'permission.asked',data:{...permission,sessionID:root}});
         send(state.current());
       }
     }catch{/* A fresh named session is created by the first prompt. Wait for its event. */}
-    return ()=>{if(closed)return;send({state:'clear'});closed=true;abort.abort();closeSync(fd);void running;};
+    void running;
+    return cleanup;
   }
 };

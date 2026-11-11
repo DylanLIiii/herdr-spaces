@@ -84,7 +84,7 @@ def validate(value):
                 raise ProjectError('PM routing uses sage or apex')
             if selected['fallback'] not in (None, 'opencode') or (selected['fallback'] and selected['backend'] != 'pi'):
                 raise ProjectError('The supported fallback is Pi to OpenCode')
-            if selected['isolation'] not in (('worktree', 'project') if role == 'worker' else ('readonly',)):
+            if selected['isolation'] not in (('worktree',) if role == 'worker' else ('readonly',)):
                 raise ProjectError(f'Invalid workspace strategy for {role}')
         result['roles'][role] = selected
     root = value.get('artifactRoot')
@@ -115,7 +115,11 @@ def resolve(project, role='worker', backend=None, model=None, tier=None):
         legacy = project.get('subAgent') or dict(backend='pi', model=None)
         profile = template('mixed')['roles'][role]
         if role != 'research':
-            profile.update(backend=legacy['backend'], model=legacy.get('model'), isolation='project' if role == 'worker' else 'readonly')
+            profile.update(backend=legacy['backend'], model=legacy.get('model'), isolation='worktree' if role == 'worker' else 'readonly')
+    # Old saved project-cwd profiles are upgraded at resolution, never in-place
+    # on an existing Run. Every new writing execution is isolated.
+    if role == 'worker':
+        profile['isolation'] = 'worktree'
     if backend:
         if backend not in BACKENDS:
             raise ProjectError('Unknown backend')

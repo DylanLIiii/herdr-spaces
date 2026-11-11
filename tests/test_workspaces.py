@@ -65,11 +65,21 @@ class WorkspaceTests(unittest.TestCase):
         self.assertIn('pm', runs[0]['skillSnapshot'])
         self.assertTrue(all('--cwd' in call.args[0] for call in self.hc.call_args_list))
 
-    def test_project_writer_cannot_overlap_another_project_writer(self):
-        self.launch('first', override=dict(isolation='project'))
-        with self.assertRaisesRegex(ProjectError, 'live/uncertain writer'):
-            self.launch('second', override=dict(isolation='project'))
-        self.assertEqual(1, len(self.store.get('p')['runs']))
+    def test_unisolated_worker_rejected_even_with_no_other_writer(self):
+        with self.assertRaisesRegex(ProjectError, 'isolated worktree'):
+            self.launch('first', override=dict(isolation='project'))
+        self.assertEqual([], self.store.get('p')['runs'])
+        self.hc.assert_not_called()
+
+    def test_old_preferences_resolve_to_isolation_without_mutating_saved_config(self):
+        legacy = {'subAgent': {'backend': 'pi', 'model': None}}
+        self.assertEqual('worktree', teams.resolve(legacy)['isolation'])
+        p = self.store.get('p')
+        p['configuration']['roles']['worker']['isolation'] = 'project'
+        self.assertEqual('worktree', teams.resolve(p)['isolation'])
+        self.assertEqual('project', p['configuration']['roles']['worker']['isolation'])
+        with self.assertRaises(ProjectError):
+            teams.validate({k:p['configuration'][k] for k in ('template','routing','roles','followup','artifactRoot')})
 
     def test_research_has_separate_durable_directory(self):
         self.launch('research', role='research')

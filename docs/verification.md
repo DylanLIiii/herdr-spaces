@@ -1,5 +1,14 @@
 # 验证记录
 
+## 0.4.2 审计返工验收
+
+- 所有新写任务强制 worktree 隔离，旧配置仅在下次派发时解析为隔离，不改现有 Run；底层启动与目录准备同样拒绝 project-cwd 写入。
+- 状态流正常结束、异常和同步订阅失败均清除 PSP；迟到快照不能恢复旧状态。4 项 setup 生命周期测试先失败后通过，原始证据见 [失败记录](native-core-audit/lifecycle-before.txt) 与 [通过记录](native-core-audit/lifecycle-after.txt)。原 v0.4.0 启动路径缺 parent 的失败保存在 [parent-v040-before.txt](native-core-audit/parent-v040-before.txt)。
+- [生产 mini 验证](native-core-audit/production-mini.json) 使用实际 manager/runtime/_run 生成的 `opencode --standalone mini` 命令和真实 Core，观察到 working、done、error。模型及标题请求全部由本地确定性 HTTP fixture 响应，付费调用为0；不是手工 serve 后 attach 的替代路径。权限/问题映射仍以原生事件边界回归验证，不冒称已由真实模型触发。
+- npm check/test、diff检查通过：98 Python + 41 JavaScript。
+- 已对真实 ts-mini 项目保存 [升级前比较](native-core-audit/ts-mini-before-audit-fix.json)、[升级后比较](native-core-audit/ts-mini-after.json) 与 [安装回执](native-core-audit/installations.json)。保留稳定Main身份/代次、Run/report/artifact/decision标识，核对既有终端PID与创建时间，以及已安装文件哈希；无凭据或提示词。静态SQLite备份以 immutable 只读打开，当前库仍使用正常WAL读取。
+- 本机和ts-mini均更新0.4.2，Agent重启0。旧终端父关系与旧mini未加载适配器的限制仍保留。
+
 ## 0.4.1 Core 原生集成
 
 - `npm run check`、`npm test`（97 Python + 37 JavaScript）与 `git diff --check` 通过。覆盖原生父子启动、OpenCode事件到PSP状态映射、直接hc送达与不明结果去重、同级协作权限、schema2历史保留、PM交接、历史执行折叠及协作记录UI。

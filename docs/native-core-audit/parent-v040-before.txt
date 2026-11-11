@@ -1,0 +1,15 @@
+test_worker_is_core_child_without_forced_new_tab (test_native_agents.NativeAgentTests.test_worker_is_core_child_without_forced_new_tab) ... FAIL
+
+======================================================================
+FAIL: test_worker_is_core_child_without_forced_new_tab (test_native_agents.NativeAgentTests.test_worker_is_core_child_without_forced_new_tab)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/var/folders/9l/qzgwttq17ps8lhfhrtgpdkx00000gn/T/hps-baseline-2e51cs5a/tests/test_native_agents.py", line 32, in test_worker_is_core_child_without_forced_new_tab
+    self.assertIn('--parent', args)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+AssertionError: '--parent' not found in ['run', '--json', '--bg', '--keep', '--no-parent', '--no-notify', '--cwd', '/private/var/folders/9l/qzgwttq17ps8lhfhrtgpdkx00000gn/T/tmp11xgqbe2', '--label', 'herdr.space=space', '--label', 'herdr.tab=hp-run-d6a9a553991346c9', '--label', 'projects.project=one', '--label', 'projects.launch=<REDACTED>', '--label', 'projects.role=worker', '--', '/opt/homebrew/opt/python@3.14/bin/python3.14', '/private/var/folders/9l/qzgwttq17ps8lhfhrtgpdkx00000gn/T/hps-baseline-2e51cs5a/project.py', '--home', '/private/var/folders/9l/qzgwttq17ps8lhfhrtgpdkx00000gn/T/tmp11xgqbe2/ledger', '_run', '--project', 'one', '--token', '<REDACTED>', '--run', 'run-d6a9a553991346c9']
+
+----------------------------------------------------------------------
+Ran 1 test in 0.032s
+
+FAILED (failures=1)
